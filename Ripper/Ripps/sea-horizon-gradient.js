@@ -7,7 +7,7 @@ export const meta = {
   id: 'skybox-ref-gradient',
   name: 'Skybox — Reference Gradient (Test)',
   type: 'algorithmic',
-  fps: 30,
+  fps: 60,
   duration: 10
 };
 

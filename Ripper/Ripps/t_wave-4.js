@@ -5,7 +5,7 @@
 //        →     { x: center.x + 250, y: center.y - 57, z: center.z }
 // Rotation remains ROT_DEG = { x: 0, y: 0, z: -30 } (applied X→Y→Z to base +Y).
 
-export const meta = { name: 'Planewave — X translate 3s (red on hit)', fps: 30, duration: 120 };
+export const meta = { name: 'Planewave — X translate 3s (red on hit)', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 const HALF_THICKNESS_WU = 2.5;    // collision band half‑thickness around the plane

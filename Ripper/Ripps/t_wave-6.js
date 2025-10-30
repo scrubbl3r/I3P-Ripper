@@ -1,7 +1,7 @@
 // ripp—planewave—diagnostic (tiltX+15, spinY 3s, XY sweep 3s + Z→90, red on hit).js
 // Preview contract: init(api), update(api, t, dt)
 
-export const meta = { name: 'Planewave — tiltX+15, spinY 3s, XY sweep + Z tumble (red on hit)', fps: 30, duration: 120 };
+export const meta = { name: 'Planewave — tiltX+15, spinY 3s, XY sweep + Z tumble (red on hit)', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 const HALF_THICKNESS_WU = 2.5;    // collision band half-thickness around the plane

@@ -1,7 +1,7 @@
 // ripp—planewave—spawned waves (tiltX+25, spinY 2s, XY sweep + Z→90, band-blend, SPAWN_MS).js
 // Preview contract: init(api), update(api, t, dt)
 
-export const meta = { name: 'Planewave — spawned waves, rolling band blend', fps: 30, duration: 120 };
+export const meta = { name: 'Planewave — spawned waves, rolling band blend', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 const WAVE_PALETTE = [

@@ -3,7 +3,7 @@
 // Pure black water, pure white background. Keep soft transparency at the wave crest.
 // Self‑contained (does not rely on external textures). 30 fps.
 
-export const meta = { name: 'Sea Horizon — Black/White (soft crest alpha)', fps: 30, duration: 120 };
+export const meta = { name: 'Sea Horizon — Black/White (soft crest alpha)', fps: 60, duration: 120 };
 
 const ctx = {
   ready: false,

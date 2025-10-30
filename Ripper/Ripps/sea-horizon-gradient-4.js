@@ -7,7 +7,7 @@ export const meta = {
   id: 'equator-waves',
   name: 'Equator Waves — 10s seamless (skybox + crests)',
   type: 'algorithmic',
-  fps: 30,
+  fps: 60,
   duration: 10
 };
 

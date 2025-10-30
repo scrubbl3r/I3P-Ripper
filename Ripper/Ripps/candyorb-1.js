@@ -6,7 +6,7 @@
 
 export const meta = {
   name: 'Plane Osc · Spawner (0.2s) · 14 max · Strobe 10Hz',
-  fps: 30,
+  fps: 60,
   duration: 120
 };
 

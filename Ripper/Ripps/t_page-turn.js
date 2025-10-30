@@ -8,7 +8,7 @@
 //   • 11000–12000 ms: pause (hold) → loop
 // TD/Ls are initialized WHITE.
 
-export const meta = { name: 'Planewave — Z wipe (5s + pause + reverse, soft ramp)', fps: 30, duration: 120 };
+export const meta = { name: 'Planewave — Z wipe (5s + pause + reverse, soft ramp)', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 const HALF_THICKNESS_WU = 2.5;    // collision band half‑thickness around the plane

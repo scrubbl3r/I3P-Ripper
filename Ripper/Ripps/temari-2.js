@@ -1,6 +1,6 @@
 // Plane Spawn ▸ Start→End ▸ Fade In/Out ▸ Blend Crossings ▸ Destroy
 // RNG spawn 50–500ms · 40 max concurrent · band 0.01–2.0 DM
-export const meta = { name: 'Plane Spawn → Fade → Blend (w/ Smooth Gradient Underlay)', fps: 30, duration: 120 };
+export const meta = { name: 'Plane Spawn → Fade → Blend (w/ Smooth Gradient Underlay)', fps: 60, duration: 120 };
 
 // ---------- vec helpers ----------
 const dot=(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z;

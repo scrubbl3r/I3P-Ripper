@@ -1,7 +1,7 @@
 // ripp—tdl-collide-orange-emitter (30fps, geometric-accel, random-start+az, trails+palette, no-repeat colors).js
 // Preview contract: init(api), update(api, t, dt)
 
-export const meta = { name: 'Emitter: Top→Bottom (geom accel, random start+az, trails, no-repeat palette)', fps: 30, duration: 120 };
+export const meta = { name: 'Emitter: Top→Bottom (geom accel, random start+az, trails, no-repeat palette)', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 // per-sphere diameter range (world units)

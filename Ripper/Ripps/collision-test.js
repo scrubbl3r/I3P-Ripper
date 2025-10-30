@@ -5,7 +5,7 @@
 export const meta = {
   id: "orbit-collide-green",
   name: "Orbit Collision — Green",
-  fps: 30,
+  fps: 60,
   duration: 0.01
 };
 

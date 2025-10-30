@@ -3,7 +3,7 @@
 // Diagnostic: a single infinite plane, **no animation**. Plane passes through the
 // **center of the dome** (middle) and we paint **RED on collision**, **WHITE otherwise**.
 
-export const meta = { name: 'Planewave — diagnostic (mid-plane, red on hit)', fps: 30, duration: 120 };
+export const meta = { name: 'Planewave — diagnostic (mid-plane, red on hit)', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 const HALF_THICKNESS_WU = 2.5;    // collision band half‑thickness around the plane

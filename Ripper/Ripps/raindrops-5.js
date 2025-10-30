@@ -7,7 +7,7 @@
 //  • Early‑out if there are zero spheres
 //  • Minor micro‑opts in loops
 
-export const meta = { name: 'Emitter: Top→Bottom (orange, geom accel, rnd start+az, GC)', fps: 30, duration: 120 };
+export const meta = { name: 'Emitter: Top→Bottom (orange, geom accel, rnd start+az, GC)', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 const SPHERE_RADIUS_WU = 15.0;      // collision radius

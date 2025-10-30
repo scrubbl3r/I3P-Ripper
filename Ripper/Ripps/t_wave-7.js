@@ -1,7 +1,7 @@
 // ripp—planewave—diagnostic (tiltX+25, spinY 2s, independent X/Y sweep + Z→90, side-paint).js
 // Preview contract: init(api), update(api, t, dt)
 
-export const meta = { name: 'Planewave — tiltX+25, spinY 2s, X/Y sweep + Z tumble (side paint)', fps: 30, duration: 120 };
+export const meta = { name: 'Planewave — tiltX+25, spinY 2s, X/Y sweep + Z tumble (side paint)', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 const BASE = [0, 0, 1, 1];        // (−n side)

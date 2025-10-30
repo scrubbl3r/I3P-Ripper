@@ -2,7 +2,7 @@
 // Preview contract: init(api), update(api, t, dt)
 // Plane passes through the dome center. Fixed tilt +15° (X), continuous spin around Y (1s per rev).
 
-export const meta = { name: 'Planewave — tiltX+15, spinY 1s (red on hit)', fps: 30, duration: 120 };
+export const meta = { name: 'Planewave — tiltX+15, spinY 1s (red on hit)', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 const HALF_THICKNESS_WU = 2.5;    // collision band half-thickness around the plane

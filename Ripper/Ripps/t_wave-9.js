@@ -1,7 +1,7 @@
 // ripp—planewave—diagnostic (tiltX+25, spinY 2s, XY sweep + Z→90, side-paint, pause+invert+restart).js
 // Preview contract: init(api), update(api, t, dt)
 
-export const meta = { name: 'Planewave — tiltX+25, spinY 2s, sweep+tumble (pause 1s on monochrome, invert, restart)', fps: 30, duration: 120 };
+export const meta = { name: 'Planewave — tiltX+25, spinY 2s, sweep+tumble (pause 1s on monochrome, invert, restart)', fps: 60, duration: 120 };
 
 // ---- Tunables --------------------------------------------------------------
 // Colors are "side-of-plane": +n side gets POS_COLOR, −n side gets NEG_COLOR.
