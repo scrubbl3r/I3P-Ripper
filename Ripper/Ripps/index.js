@@ -13,9 +13,10 @@ export default [
   //{ id: 't_wave-5', name: 't_wave-5' },
   //{ id: 't_wave-6', name: 't_wave-6' },
   //{ id: 't_wave-7', name: 't_wave-7' },
-  //{ id: 't_wave-8', name: 't_wave-8' },
-  { id: 't_wave-9', name: 't_wave-9' },
-  { id: 't_wave-10', name: 't_wave-10' },
+  
+  { id: 't_wave-9', name: 't_wave-7' },
+  //{ id: 't_wave-10', name: 't_wave-10' },
+  { id: 't_wave-8', name: 't_wave-8' },
   //{ id: 't_wave-11', name: 't_wave-11' },
   //{ id: 't_wave-12', name: 't_wave-12' },
   //{ id: 'temari-1', name: 'temari-1' },
