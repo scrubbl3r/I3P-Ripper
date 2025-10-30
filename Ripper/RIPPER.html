@@ -1,0 +1,3898 @@
+<!doctype html>
+<html>
+<head>
+<script>
+// ---------- SSOT constants (single source of truth) ----------
+window.__WB_CONSTANTS__ = window.__WB_CONSTANTS__ || {
+  DEFAULT_FPS: 30,
+  WB_SPAWN_SCALE: 3,
+  PATH_WIDTH_PX: 2
+};
+</script>
+
+<!--
+===============================================================================
+ Ripper / Workbench — Commented Snapshot
+ Built: 2025-10-21 17:59:52
+ Notes:
+ - This snapshot adds non-functional comments and section headers for navigation.
+ - Search for the markers below to jump quickly in VS Code:
+
+   [WB] EDITOR UI ................. Workbench floating editor (open/apply/reset)
+   [WB] UNITS ..................... DD/DM/DC/WU canon + helpers
+   [WB] SIZE IO ................... Size (DM) <-> scale conversion in editor
+   [WB] LIST ...................... Workbench list rendering + Delete/Edit hooks
+   [WB] PATHS ..................... Line/Curve/Orbit builders
+   [WB] FOLLOW .................... Path follow rig + frame sampling
+   [WB] EXPORT .................... Bench JSON export (buildBenchJSON)
+   [WB] UTILS ..................... Small helpers (safe number, deg/rad, etc)
+
+ - Function anchors (find by name): buildBenchJSON, refreshWBList, openWBEditor,
+   _populateFrom, _applyTo, rebuildWBLine, rebuildWBCurve, rebuildWBOrbit,
+   getPathFrame, updateFollowersForPath, ensureFollowRig, detachFollowRig.
+
+ This file should behave identically to your original RIPPER.html.
+===============================================================================
+-->
+
+<meta charset="utf-8"/>
+<title>Dome Previsualizer — WU Build</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  :root { --green:#7dd35f; }
+  
+  html,body { height:100%; margin:0; background:rgb(10,10,10); color:#ddd; font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  #app { position:fixed; inset:0; }
+
+  .hud {
+    position:fixed; top:14px; right:16px;
+    font:12px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.3px;
+    background:rgba(0,0,0,.35); padding:6px 8px; border:1px solid #1f2a1b; border-radius:8px; user-select:none;
+    z-index:20; color:#cfcfcf;
+  }
+  #angles { left:16px; right:auto; }
+  #idHud { top:14px; right:16px; }
+  .hidden { display:none !important; }
+
+  /* bottom strip (left-justified) */
+  #seqHud {
+    top:auto; bottom:14px; left:16px; right:auto;
+    display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+  }
+  #seqHud > * { background:#131313; border:1px solid #333; color:#ddd; border-radius:8px; padding:6px 8px; font:12px ui-monospace,Menlo,monospace }
+  #seqHud label { background:transparent; border:none; padding:0; color:#9ad985 }
+  #seqHud .soft { opacity:.8; }
+
+  #devToggles { display:flex; gap:8px; align-items:center; }
+  #devToggles label { display:inline-flex; gap:6px; align-items:center; background:transparent; border:none; padding:0; color:#cfe8c7; }
+  .sw { display:inline-block; width:10px; height:10px; border-radius:50%; }
+  /* DEV WIRE COLORS*/
+  .sw.t { background:#c800ff; } .sw.d { background:#ffff00; } .sw.l { background:#ff7f00; }
+
+  .hint { position:fixed; left:14px; bottom:14px; color:#8f8f8f; font-size:12px; opacity:.8;
+          background:rgba(0,0,0,.25); padding:6px 8px; border:1px solid #222; border-radius:8px; }
+
+  /* Workbench panel (left) */
+  #wbPanel {
+    position:fixed; top:14px; left:16px; bottom:72px; width:320px; z-index:25;
+    background-color: rgba(16,16,16,0.30);
+    border:1px solid #2a2a2a; border-radius:10px; padding:10px;
+    display:none; overflow:auto;
+  }
+  #wbPanel h3 { margin:0 0 8px; font:600 13px ui-monospace,Menlo,monospace; color:#bfe9a8; }
+  #wbPanel .row { display:flex; gap:8px; align-items:center; margin:6px 0; }
+  #wbPanel .row input[type="number"] { width:80px; background:#151515; border:1px solid #333; color:#ddd; border-radius:6px; padding:4px 6px; }
+  #wbPanel select, #wbPanel button, #wbPanel input[type="text"] {
+    background:#141414; border:1px solid #333; color:#ddd; border-radius:6px; padding:4px 6px; font:12px ui-monospace,Menlo,monospace;
+  }
+  #wbPanel .list { border:1px solid #333; border-radius:8px; padding:6px; background:#0f0f0f; }
+  #wbPanel .vol { padding:6px; border:1px solid #2a2a2a; border-radius:6px; margin-bottom:6px; background:#121212; }
+  #wbPanel .vol .head { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  #wbPanel .vol .head .name { color:#dfe; font-weight:600; }
+  #wbPanel .vol .head .mini { display:flex; gap:6px; align-items:center; }
+  .chip { display:inline-block; padding:2px 6px; border-radius:999px; border:1px solid #3a3a3a; font-size:11px; background:#0e0e0e; }
+  .sep { height:1px; background:#222; margin:8px 0; }
+
+  /* Workbench axis view buttons (bottom-right, vertical) */
+  #wbViews {
+    position:fixed; bottom:14px; right:16px; z-index:26;
+    display:none; flex-direction:column; gap:6px;
+  }
+  #wbViews button {
+    width:42px; height:28px; border-radius:8px; border:1px solid #333;
+    background:#141414; color:#ddd; cursor:pointer; font:12px ui-monospace,Menlo,monospace;
+  }
+  /* Color-coded axis buttons */
+ /* Color-coded axis buttons (force text color) */
+#viewX, #viewX:hover, #viewX:focus, #viewX:active {
+  color:#ff3a3a !important;
+  -webkit-text-fill-color:#ff3a3a !important;
+  background:linear-gradient(#2a0000,#1a0000);
+  border-color:#5c1c1c;
+  box-shadow:0 0 0 1px rgba(255,74,74,.15) inset;
+}
+#viewY, #viewY:hover, #viewY:focus, #viewY:active {
+  color:#32ff32 !important;
+  -webkit-text-fill-color:#32ff32 !important;
+  background:linear-gradient(#002a00,#001a00);
+  border-color:#215c21;
+  box-shadow:0 0 0 1px rgba(87,255,87,.15) inset;
+}
+#viewZ, #viewZ:hover, #viewZ:focus, #viewZ:active {
+  color:#3a8bff !important;
+  -webkit-text-fill-color:#3a8bff !important;
+  background:linear-gradient(#00162a,#000e1a);
+  border-color:#1b3e6b;
+  box-shadow:0 0 0 1px rgba(74,163,255,.15) inset;
+}
+
+  #wbViews button:active { transform:translateY(1px); }
+
+  #wbPanel .list .item { display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border:1px solid #2a2a2a; border-radius:6px; margin:6px 0; background:#121212; }
+  #wbPanel .list .meta { font:12px ui-monospace,Menlo,monospace; color:#a0d39a; }
+  #wbPanel .list .name { font-weight:600; color:#e5ffe0; }
+
+
+  #wbPanel .list .item { display:grid; grid-template-columns: 1fr auto; gap:8px; padding:8px; border:1px solid #2a2a2a; border-radius:8px; margin:8px 0; background:#121212; }
+  #wbPanel .list .split { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  #wbPanel .list .controls { grid-column: 1 / -1; display:grid; gap:6px; }
+  #wbPanel .list .row { display:grid; grid-template-columns: auto 1fr 1fr 1fr; gap:6px; align-items:center; }
+  #wbPanel .list input[type="number"] { width:100%; background:#0c0c0c; color:#e0ffe0; border:1px solid #2a2a2a; border-radius:6px; padding:4px 6px; }
+  #wbPanel .list .danger { background:#2a0f0f; color:#ffd7d7; border:1px solid #552222; padding:4px 8px; border-radius:6px; cursor:pointer; }
+
+
+  /* Inline Workbench save block beside Mode */
+  #wbSaveWrap { display:inline-flex; gap:8px; align-items:center; }
+  #wbSaveWrap input[type="text"] { max-width: 220px; }
+
+  #wbPanel .list { margin-top:8px; }
+  #wbPanel .list .item { display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border:1px solid #2a2a2a; border-radius:6px; margin:6px 0; background:#121212; }
+  #wbPanel .list .name { font-weight:600; color:#e5ffe0; }
+  #wbPanel .list .meta { font:12px ui-monospace,Menlo,monospace; color:#a0d39a; margin-left:8px; }
+  #wbPanel .list .danger { background:#2a0f0f; color:#ffd7d7; border:1px solid #522; padding:4px 8px; border-radius:6px; cursor:pointer; }
+
+
+  /* Clean list look (no placeholder lines) */
+  #wbPanel .list { margin-top:8px; border-top: 0; }
+  #wbPanel .list .item { background: transparent; border:1px solid #2a2a2a; border-radius:8px; }
+
+
+  /* OVERRIDES: make list container transparent and non-bordered */
+  #wbPanel .list { border:0 !important; background:transparent !important; padding:0 !important; border-radius:0 !important; position:relative; z-index:2; }
+  #wbPanel .list .item { background:transparent !important; }
+  #wbPanel .list .name, #wbPanel .list .meta { color:#e8ffe8 !important; mix-blend-mode:normal; }
+
+
+  /* Swatch + clearer rows */
+  #wbPanel .list .item { border:1px solid #2a2a2a; border-radius:8px; padding:6px 8px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  #wbPanel .list .left { display:flex; align-items:center; gap:8px; }
+  
+  /* Center overlay for last-added object */
+  #wbLastAdded {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    z-index: 9999; pointer-events: none;
+  }
+  #wbLastAdded .pill {
+    font: 600 18px ui-monospace, Menlo, monospace;
+    color: #eaffea;
+    background: rgba(0,0,0,0.65);
+    border: 1px solid #3a3a3a;
+    border-radius: 12px;
+    padding: 10px 14px;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+  }
+  #wbLastAdded .sw { display:inline-block; width:12px; height:12px; border:1px solid #666; border-radius:3px; vertical-align:middle; margin-right:8px; }
+
+
+  /* Ensure list rows are visible and not occluded */
+  #wbPanel { z-index: 50; }
+  #wbPanel .list { position: relative; z-index: 51; border:0 !important; background:transparent !important; padding:0 !important; }
+  #wbPanel .list .item { border:1px solid #2a2a2a; border-radius:8px; padding:6px 8px; display:flex; justify-content:space-between; align-items:center; gap:10px; background:transparent; }
+  #wbPanel .list .left { display:flex; align-items:center; gap:8px; }
+  #wbPanel .list .name { font-weight:600; color:#eaffea; }
+  #wbPanel .list .meta { font:12px ui-monospace,Menlo,monospace; color:#a0d39a; }
+  /* Center overlay for last-added */
+  #wbLastAdded{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:9999; pointer-events:none;}
+  #wbLastAdded .pill{font:600 18px ui-monospace,Menlo,monospace; color:#eaffea; background:rgba(0,0,0,0.7); border:1px solid #3a3a3a; border-radius:12px; padding:10px 14px;}
+  #wbLastAdded .pill .sw{display:inline-block; width:12px; height:12px; border:1px solid #666; border-radius:3px; margin-right:8px; vertical-align:middle;}
+
+  #wbLastAdded{display:none !important;}
+  body.wb-dragging #wbPanel { pointer-events: none; }
+  body.wb-dragging { cursor: grabbing !important; user-select: none; }
+
+  /* While dragging the scene in Workbench, let pointer pass through the panel */
+  body.wb-dragging #wbPanel { pointer-events: none; }
+  body.wb-dragging { cursor: grabbing !important; user-select: none; }
+
+  /* Workbench floating editor */
+  #wbEditor {
+    position: fixed; top: 120px; left: 360px; z-index: 1000;
+    /* contain, respect borders/padding in width calc */
+    box-sizing: border-box;
+    max-width: calc(100vw - 40px);
+    overflow: hidden; /* keep children from spilling out */
+    width: 560px; background: rgba(14,14,14,0.96);
+    border: 1px solid #2a2a2a; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    display: none;
+  }
+  #wbEditor .head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 10px; border-bottom: 1px solid #222; cursor: move;
+    font: 600 12px ui-monospace,Menlo,monospace; color: #cfe8c7; background: #111;
+    border-radius: 10px 10px 0 0;
+  }
+  #wbEditor .body { padding: 12px; display: grid; gap: 12px; overflow-x: hidden; }
+  /* select styling */
+  #wbEditor .wb-select{
+    width: 100%; background:#0c0c0c; color:#e0ffe0; border:1px solid #2a2a2a;
+    border-radius:6px; padding:6px 8px; font:12px ui-monospace,Menlo,monospace;
+  }
+
+  /* inherit box-sizing for all editor children to avoid width creep */
+  #wbEditor, #wbEditor * , #wbEditor *::before, #wbEditor *::after { box-sizing: inherit; }
+  #wbEditor .row { display: grid; grid-template-columns: 92px 1fr 1fr 1fr; gap: 6px; align-items: center; }
+  #wbEditor label {
+    color:#cfe8c7;
+    font: 12px ui-monospace,Menlo,monospace;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;               /* keep Start + swatch on one line */
+    display: flex;                     /* treat text + swatch as a single unit */
+    justify-content: flex-end;         /* push them to the right edge of the label column */
+    align-items: center;
+    gap: 8px;                          /* space between text and swatch */
+    text-align: right;
+    padding-right: 6px;                /* small breathing room from the X tag column */
+    min-height: 28px;                  /* aligns with axis tag height */
+  }
+
+  /* tiny color swatches used in labels */
+  #wbEditor .swatch{
+    display:inline-block;
+    width:12px; height:12px;
+    margin-left:6px;
+    border-radius:3px;
+    vertical-align:middle;
+    border:1px solid rgba(255,255,255,0.15);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
+  }
+  #wbEditor .swatch--green{ background:#29c266; border-color:#2ee180; }
+  #wbEditor .swatch--red  { background:#e25555; border-color:#ff7a7a; }
+  #wbEditor .swatch--yellow{ background:#f2d14b; border-color:#ffe17a; }
+
+  #wbEditor input[type="number"] {
+    width: 100%; background:#0c0c0c; color:#e0ffe0; border:1px solid #2a2a2a;
+    border-radius:6px; padding:4px 6px;
+  }
+  #wbEditor .foot { display:flex; justify-content:flex-end; gap:8px; padding: 0 10px 10px; }
+  #wbEditor .soft { opacity: .7; }
+  #wbEditor .btn {
+    background:#141414; border:1px solid #333; color:#ddd; border-radius:6px; padding:6px 10px;
+    font:12px ui-monospace,Menlo,monospace; cursor:pointer;
+  }
+
+  /* Axis-labeled inputs */
+.axis-field {
+  position: relative; display: grid; grid-template-columns: 36px 1fr; gap: 6px; align-items: center;
+}
+.axis-field .tag {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:36px; height:28px; border-radius:6px; font: 10px/1 ui-monospace,Menlo,monospace;
+  color:#fff; border:1px solid #333; background:#333;
+}
+.axis-field .tag.x { background:#8b2a2a; border-color:#b34848; }
+.axis-field .tag.y { background:#1f5b2a; border-color:#2f9144; }
+.axis-field .tag.z { background:#1e3f7a; border-color:#2d63c2; }
+
+input.axis-x { border-color:#b34848; }
+input.axis-y { border-color:#2f9144; }
+input.axis-z { border-color:#2d63c2; }
+
+input.axis-x:focus { box-shadow: 0 0 0 2px rgba(179,72,72,0.35); outline:none; }
+input.axis-y:focus { box-shadow: 0 0 0 2px rgba(47,145,68,0.35); outline:none; }
+input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
+
+/* Space the footer now that Apply is gone */
+#wbEditor .foot { justify-content: flex-end; }
+
+/* Orbit inline Start/End angles */
+.orbit-angles { grid-template-columns: 1fr; } /* collapse the row grid */
+.orbit-angles-right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: .5rem;
+}
+.orbit-angles-right input { width: 88px; }
+
+/* Orbit: put Start/End on one line and align to the right */
+#wbEditorOrbit .row.orbit-angles {
+  /* collapse the usual label + 3-field grid into a single column */
+  grid-template-columns: 1fr !important;
+}
+
+#wbEditorOrbit .row.orbit-angles > label,
+#wbEditorOrbit .row.orbit-angles .axis-field {
+  /* hide any stray label/axis cells in this special row */
+  display: none !important;
+}
+
+#wbEditorOrbit .orbit-angles-right {
+  display: flex;
+  justify-content: flex-end;   /* push to right edge */
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-left: auto;           /* belt-and-suspenders to ensure right align */
+}
+
+#wbEditorOrbit .orbit-angles-right label { white-space: nowrap; }
+#wbEditorOrbit .orbit-angles-right input {
+  width: 88px;                 /* tidy width so both inputs fit nicely */
+  min-width: 88px;
+}
+
+/* Make "Mode" dropdown fit the editor width */
+#wbObjModeRow {
+  grid-template-columns: auto 1fr !important;   /* label + fluid content */
+}
+
+#wbObjModeRow > div {
+  grid-column: 2 / -1 !important;               /* span to the end */
+  min-width: 0;                                  /* allow shrinking inside grid */
+}
+
+#wbObjPathSelect {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.wb-scrubbing { cursor: ew-resize !important; }
+
+/* Hide up/down arrows for all Workbench editor number inputs */
+#wbEditor input[type="number"],
+#wbEditorLine input[type="number"],
+#wbEditorCurve input[type="number"],
+#wbEditorOrbit input[type="number"] {
+  -moz-appearance: textfield;     /* Firefox */
+  appearance: textfield;          /* Modern browsers */
+}
+
+/* Chrome / Safari / Edge (WebKit/Blink) */
+#wbEditor input[type="number"]::-webkit-outer-spin-button,
+#wbEditor input[type="number"]::-webkit-inner-spin-button,
+#wbEditorLine input[type="number"]::-webkit-outer-spin-button,
+#wbEditorLine input[type="number"]::-webkit-inner-spin-button,
+#wbEditorCurve input[type="number"]::-webkit-outer-spin-button,
+#wbEditorCurve input[type="number"]::-webkit-inner-spin-button,
+#wbEditorOrbit input[type="number"]::-webkit-outer-spin-button,
+#wbEditorOrbit input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+
+</style>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js"
+}}
+</script>
+</head>
+<body>
+<div id="app"></div> 
+
+<!-- Readouts -->
+<div id="idHud" class="hud">ID: —</div>
+<div id="angles" class="hud" style="top:14px; left:16px">az: 0°  el: 0°  dist: 0.00</div>
+
+<!-- Workbench panel -->
+<div id="wbPanel">
+  <h3>Workbench — Volumes</h3>
+  <div class="row">
+    <label>Create</label>
+    <select id="wbPrimType">
+      <option value="plane">Plane</option>
+      <option value="sphere">Sphere</option>
+      <option value="cube">Cube</option>
+      <option value="cylinder">Cylinder</option>
+      <option value="cone">Cone</option>
+    
+      <option value="line">Line Path</option>
+      <option value="curve">Curve Path</option>
+      <option value="orbit">Orbit Path</option>
+    </select>
+    <button id="wbAddPrim">+ Add</button>
+  </div>
+  <div id="wbList" class="list"></div>  
+</div>
+
+<!-- Workbench floating editor -->
+<div id="wbEditor" aria-hidden="true">
+  <div class="head" id="wbEditorDrag">
+    <span id="wbEditorTitle">Edit</span>
+    <button id="wbEditorClose" class="btn">Close</button>
+  </div>
+  <div class="body">
+    <!-- Mode selector: Object (default) or attach to an existing path -->
+    <div class="row" id="wbObjModeRow">
+      <label>Mode</label>
+      <div style="grid-column: span 3;">
+        <select id="wbObjPathSelect" class="wb-select">
+          <option value="">Object (no path)</option>
+          <!-- paths will be injected here from JS -->
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+    <label>Position</label>
+    <div class="axis-field"><span class="tag x">X</span><input id="wbPosX" class="axis-x" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag y">Y</span><input id="wbPosY" class="axis-y" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag z">Z</span><input id="wbPosZ" class="axis-z" type="number" step="0.01" /></div>
+  </div>
+  <div class="row">
+    <label>Rotation°</label>
+    <div class="axis-field"><span class="tag x">X</span><input id="wbRotX" class="axis-x" type="number" step="0.1" /></div>
+    <div class="axis-field"><span class="tag y">Y</span><input id="wbRotY" class="axis-y" type="number" step="0.1" /></div>
+    <div class="row-field axis-field"><span class="tag z">Z</span><input id="wbRotZ" class="axis-z" type="number" step="0.1" /></div>
+  </div>
+  <div class="row">
+    <label>Size</label>
+    <div class="axis-field"><span class="tag x">X</span><input id="wbSclX" class="axis-x" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag y">Y</span><input id="wbSclY" class="axis-y" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag z">Z</span><input id="wbSclZ" class="axis-z" type="number" step="0.01" /></div>
+  </div>
+  </div>
+
+  <!-- CURVE PATH editor (shown only when editing a 'curve') -->
+<div id="wbEditorOrbit" style="display:none;">
+  <div class="row orbit-angles">
+    <div class="orbit-angles-right">
+      <label for="wbOStartDeg">Start <span class="swatch swatch--green" aria-label="green"></span> angle°</label>
+      <input id="wbOStartDeg" type="number" min="0" max="360" step="0.1" />
+
+      <label for="wbOEndDeg" style="margin-left:12px;">End <span class="swatch swatch--red" aria-label="red"></span> angle°</label>
+      <input id="wbOEndDeg" type="number" min="0" max="360" step="0.1" />
+    </div>
+  </div>
+</div>
+
+
+<div id="wbEditorCurve" style="display:none;">
+  <div class="row">
+    <label>Start <span class="swatch swatch--green" aria-label="green"></span></label>
+    <div class="axis-field"><span class="tag x">X</span><input id="wbCStartX" class="axis-x" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag y">Y</span><input id="wbCStartY" class="axis-y" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag z">Z</span><input id="wbCStartZ" class="axis-z" type="number" step="0.01" /></div>
+  </div>
+  <div class="row">
+    <label>Control <span class="swatch swatch--yellow" aria-label="yellow"></span></label>
+    <div class="axis-field"><span class="tag x">X</span><input id="wbCCtrlX" class="axis-x" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag y">Y</span><input id="wbCCtrlY" class="axis-y" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag z">Z</span><input id="wbCCtrlZ" class="axis-z" type="number" step="0.01" /></div>
+  </div>
+  <div class="row">
+    <label>End <span class="swatch swatch--red" aria-label="red"></span></label>
+    <div class="axis-field"><span class="tag x">X</span><input id="wbCEndX" class="axis-x" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag y">Y</span><input id="wbCEndY" class="axis-y" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag z">Z</span><input id="wbCEndZ" class="axis-z" type="number" step="0.01" /></div>
+  </div>
+</div>
+
+  <!-- LINE PATH editor (shown only when editing a 'line') -->
+<div id="wbEditorLine" style="display:none;">
+  <div class="row">
+    <label>Start <span class="swatch swatch--green" aria-label="green"></span></label>
+    <div class="axis-field"><span class="tag x">X</span><input id="wbLStartX" class="axis-x" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag y">Y</span><input id="wbLStartY" class="axis-y" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag z">Z</span><input id="wbLStartZ" class="axis-z" type="number" step="0.01" /></div>
+  </div>
+  <div class="row">
+    <label>End <span class="swatch swatch--red" aria-label="red"></span></label>
+    <div class="axis-field"><span class="tag x">X</span><input id="wbLEndX" class="axis-x" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag y">Y</span><input id="wbLEndY" class="axis-y" type="number" step="0.01" /></div>
+    <div class="axis-field"><span class="tag z">Z</span><input id="wbLEndZ" class="axis-z" type="number" step="0.01" /></div>
+  </div>
+</div>
+
+</div>
+
+
+<!-- Workbench axis view switch (bottom-right) -->
+<div id="wbViews">
+  <button id="viewX" title="X view">X</button>
+  <button id="viewY" title="Y (top) view">Y</button>
+  <button id="viewZ" title="Z view">Z</button>
+</div>
+
+<!-- Toolbar -->
+<div id="seqHud" class="hud">
+  <span id="modeWrap">
+    <label>Mode</label>
+    <select id="mode">
+      <option value="dev">Dev</option>
+      <option value="preview" selected>Preview</option>
+      <option value="workbench">Workbench</option>
+    </select>
+  </span>
+  <span id="wbSaveWrap">
+    <input id="wbName" type="text" placeholder="bake name (e.g. plane-cascade)"/>
+    <button id="wbBake">Bake Bench</button>
+  </span>
+
+
+  <!-- Ripp chooser (hidden in Dev, shown in Preview only) -->
+  <span id="seqWrap">
+    <label>Ripp</label>
+    <select id="sequence"></select>
+    <button id="loadSeq">Load</button>
+  </span>
+
+  <!-- Transport (shown in Preview & Workbench; hidden in Dev) -->
+  <span id="transportWrap">
+    <button id="play">Play</button>
+    <button id="pause">Pause</button>
+    <input id="scrub" type="range" min="0" max="12" step="0.01" value="0" style="width:180px"/>
+    <span class="soft">t=<span id="tVal">0.00</span>s</span>
+    <span class="soft">fps=<span id="fpsVal">30</span></span>
+    <button id="bake" title="Bake JSON (Preview only)">Bake JSON…</button>
+  </span>
+
+  <!-- Faces (Preview only: Front/Back/Both) -->
+  <span id="faceWrap">
+    <label>Faces</label>
+    <select id="faceMode">
+      <option value="front" selected>Front</option>
+      <option value="back">Back</option>
+      <option value="double">Both</option>
+    </select>
+  </span>
+
+  <!-- Dev toggles (Dev only) -->
+  <div id="devToggles">
+    <label><input id="visT" type="checkbox" checked/> <span class="sw t"></span>T</label>
+    <label><input id="visD" type="checkbox" checked/> <span class="sw d"></span>D</label>
+    <label><input id="visL" type="checkbox" checked/> <span class="sw l"></span>L</label>
+    <label><input id="visC" type="checkbox"/> Centroids</label>
+  </div>
+</div>
+
+<script type="module" id="fatline-imports">
+  import { Line2 }        from 'https://unpkg.com/three@0.160.0/examples/jsm/lines/Line2.js';
+  import { LineMaterial } from 'https://unpkg.com/three@0.160.0/examples/jsm/lines/LineMaterial.js';
+  import { LineGeometry } from 'https://unpkg.com/three@0.160.0/examples/jsm/lines/LineGeometry.js';
+
+  // Expose to the global so your existing module can feature-detect later
+  Object.assign(window, { Line2, LineMaterial, LineGeometry });
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'OrbitControls';
+import * as DOME from './dome.mesh.js'; // hardcoded baked mesh
+
+/* ---------- DOM ---------- */
+const app = document.getElementById('app');
+const idHud = document.getElementById('idHud');
+const angHud = document.getElementById('angles');
+
+const modeSel = document.getElementById('mode');
+const seqWrap = document.getElementById('seqWrap');
+const transportWrap = document.getElementById('transportWrap');
+const faceWrap = document.getElementById('faceWrap');
+const devToggles = document.getElementById('devToggles');
+
+const seqSel = document.getElementById('sequence');
+const loadBtn = document.getElementById('loadSeq');
+const playBtn = document.getElementById('play');
+const pauseBtn = document.getElementById('pause');
+const scrub = document.getElementById('scrub');
+const tVal = document.getElementById('tVal');
+const fpsVal = document.getElementById('fpsVal');
+const bakeBtn = document.getElementById('bake');
+const faceMode = document.getElementById('faceMode');
+
+const visT = document.getElementById('visT');
+const visD = document.getElementById('visD');
+const visL = document.getElementById('visL');
+const visC = document.getElementById('visC');
+
+/* Workbench DOM */
+const wbPanel = document.getElementById('wbPanel');
+const wbSaveWrap = document.getElementById('wbSaveWrap');
+const wbPrimType = document.getElementById('wbPrimType');
+const wbAddPrim = document.getElementById('wbAddPrim');
+const wbList = document.getElementById('wbList');
+const wbBake = document.getElementById('wbBake');
+const wbName = document.getElementById('wbName');/* Workbench axis view buttons */
+const wbViews = document.getElementById('wbViews');
+const viewX = document.getElementById('viewX');
+const viewY = document.getElementById('viewY');
+const viewZ = document.getElementById('viewZ');
+
+// ===== Workbench Axis Toggle (helpers) =====
+let wbLastAxis = null;
+// +side = 1, -side = -1
+let wbFlip = { x:1, y:1, z:1 };
+
+// ===== Workbench Primitives =====
+let wbGroup = null;
+let wbPrims = [];
+
+// per-type counters: sphere-001, cube-001, plane-002, etc.
+const wbCounters = Object.create(null);
+function nextWBId(type){
+  const n = (wbCounters[type] || 0) + 1;
+  wbCounters[type] = n;
+  return `${type}-${String(n).padStart(3,'0')}`;
+}
+
+// ===== [WB] IDS — generator/registry glue =====
+function _parseIdSuffix(id){
+  const m = /^([a-z]+)-(\d{3,})$/i.exec(String(id||''));
+  return m ? { type: m[1].toLowerCase(), n: parseInt(m[2], 10) } : null;
+}
+function _bumpCounterFromId(id){
+  const p = _parseIdSuffix(id);
+  if (!p) return;
+  wbCounters[p.type] = Math.max(wbCounters[p.type] || 0, p.n);
+}
+
+/**
+ * Ensure an object has a workbench id and mirror it to mesh.name and the wbPrims record.
+ * - Respects existing ids (does not overwrite).
+ * - Seeds per-type counters from any restored/imported ids.
+ */
+function ensureWBId(obj, type, rec){
+  obj.userData = obj.userData || {};
+  obj.userData.workbench = obj.userData.workbench || { type };
+  let id = obj.userData.workbench.id;
+
+  if (!id){
+    id = nextWBId(type);
+    obj.userData.workbench.id = id;
+  }
+
+  // Keep THREE name in sync (useful for lookups and debugging)
+  if (!obj.name || obj.name === '' || /^WB_/.test(obj.name)) obj.name = id;
+
+  // Mirror to caller's record if provided
+  if (rec && !rec.id) rec.id = id;
+
+  // Keep counters monotonic if we loaded an existing id like "cube-012"
+  _bumpCounterFromId(id);
+  return id;
+}
+
+
+function wbCenterVec3(){
+  const c = SceneAPI?.info?.center || {x:0,y:0,z:0};
+  return new THREE.Vector3(c.x, c.y, c.z);
+}
+
+function defaultSizeScalars(){
+  const r = SceneAPI?.info?.radius || (fullGeom?.boundingSphere?.radius) || 1;
+  return {
+    plane: r * 0.30,        // back to the smaller, workable default
+    sphere: r * 0.10,
+    cube:   r * 0.18,
+    cylR:   r * 0.08, cylH: r * 0.22,
+    coneR:  r * 0.10, coneH:r * 0.25
+  };
+}
+
+
+
+function brightRandomColor(){
+  const h=Math.floor(Math.random()*360);const s=90,l=55;
+  const c=(1-Math.abs(2*l/100-1))*(s/100);
+  const x=c*(1-Math.abs((h/60)%2-1));
+  const m=l/100-c/2; let r=0,g=0,b=0;
+  if(h<60){r=c;g=x;b=0;}else if(h<120){r=x;g=c;b=0;}else if(h<180){r=0;g=c;b=x;}
+  else if(h<240){r=0;g=x;b=c;}else if(h<300){r=x;g=0;b=c;}else{r=c;g=0;b=x;}
+  r=Math.round((r+m)*255); g=Math.round((g+m)*255); b=Math.round((b+m)*255);
+  return (r<<16)+(g<<8)+b;
+}
+
+function makePrimGeometry(type){
+  const s = defaultSizeScalars();
+  switch(type){
+    case 'plane':    return new THREE.PlaneGeometry(s.plane, s.plane, 1, 1);
+    case 'sphere':   return new THREE.SphereGeometry(s.sphere, 24, 16);
+    case 'cube':     return new THREE.BoxGeometry(s.cube, s.cube, s.cube);
+    case 'cylinder': return new THREE.CylinderGeometry(s.cylR, s.cylR, s.cylH, 24, 1, true);
+    case 'cone':     return new THREE.ConeGeometry(s.coneR, s.coneH, 24, 1, true);
+    default:         return new THREE.BoxGeometry(s.cube, s.cube, s.cube);
+  }
+}
+
+// Get dome radius (fallback if not found)
+function getDomeRadiusFallback(fallback = 5){
+  // Try to find an object named like "dome"
+  let dome = scene.getObjectByName('dome') || scene.getObjectByName('Dome');
+  if (!dome) {
+    // Heuristic: any object tagged as dome in userData
+    scene.traverse(o => { if (!dome && (o.userData?.isDome || /dome/i.test(o.name))) dome = o; });
+  }
+  if (!dome) return fallback;
+
+  // Compute bounding sphere
+  const box = new THREE.Box3().setFromObject(dome);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  return (sphere && isFinite(sphere.radius) && sphere.radius > 0) ? sphere.radius : fallback;
+}
+
+// Build a cylinder segment from p0->p1 (used for “thick line”)
+function cylinderFromPoints(p0, p1, radius, material){
+  const dir = new THREE.Vector3().subVectors(p1, p0);
+  const len = dir.length();
+  const geom = new THREE.CylinderGeometry(radius, radius, len, 20, 1, false);
+  const mesh = new THREE.Mesh(geom, material);
+
+  const mid = new THREE.Vector3().addVectors(p0, p1).multiplyScalar(0.5);
+  mesh.position.copy(mid);
+
+  const up = new THREE.Vector3(0, 1, 0);
+  const quat = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize());
+  mesh.setRotationFromQuaternion(quat);
+  return mesh;
+}
+
+// [PATCH: no-legacy-scale] — canonicalize to 1.0
+function getWorkbenchScale(){ return 1; }
+
+
+// ===== [WB] PATHS — rebuildWBLine (geometry, caps, fat line) =====
+function rebuildWBLine(group){
+  const w = group?.userData?.workbench;
+  if (!w || w.type !== 'line') return;
+
+  const p0 = w.params.start;
+  const p1 = w.params.end;
+
+  // Move caps
+  const startCap = group.getObjectByName('WB_LINE_START');
+  const endCap   = group.getObjectByName('WB_LINE_END');
+  startCap?.position?.copy(p0);
+  endCap  ?.position?.copy(p1);
+
+  // Update path (Line2 or thin Line fallback)
+  const lineObj = group.getObjectByName('WB_LINE_PATH') || group.children.find(c => c.isLine2 || c.isLine);
+  if (!lineObj) return;
+
+  if (lineObj.isLine2 && lineObj.geometry && typeof lineObj.geometry.setPositions === 'function'){
+    lineObj.geometry.setPositions([p0.x,p0.y,p0.z, p1.x,p1.y,p1.z]);
+    lineObj.computeBoundingSphere?.();
+      // notify followers
+    const rec = getWBRecByGroup(group);
+    if (rec) updateFollowersForPath(rec);
+
+  } else {
+    const geom = new THREE.BufferGeometry().setFromPoints([p0, p1]);
+    lineObj.geometry?.dispose?.();
+    lineObj.geometry = geom;
+  }
+}
+
+
+// ===== [WB] PATHS — rebuildWBCurve (bezier + handles) =====
+function rebuildWBCurve(group){
+  const w = group?.userData?.workbench;
+  if (!w || w.type !== 'curve') return;
+
+  const p0 = w.params.start;
+  const pc = w.params.control;
+  const p2 = w.params.end;
+
+  // Move handles
+  const startCap = group.getObjectByName('WB_CURVE_START');
+  const ctrlCap  = group.getObjectByName('WB_CURVE_CTRL');
+  const endCap   = group.getObjectByName('WB_CURVE_END');
+  startCap?.position?.copy(p0);
+  ctrlCap ?.position?.copy(pc);
+  endCap  ?.position?.copy(p2);
+
+  // Update display curve
+  const curve = new THREE.QuadraticBezierCurve3(p0, pc, p2);
+  const SEGMENTS = 64;
+  const pts = curve.getPoints(SEGMENTS);
+
+  const pathObj = group.getObjectByName('WB_CURVE_PATH') || group.children.find(c => c.isLine2 || c.isLine);
+  if (!pathObj) return;
+
+  if (pathObj.isLine2 && pathObj.geometry && typeof pathObj.geometry.setPositions === 'function'){
+    const flat = new Array(pts.length * 3);
+    for (let i=0, j=0; i<pts.length; i++){
+      const v = pts[i]; flat[j++] = v.x; flat[j++] = v.y; flat[j++] = v.z;
+    }
+    pathObj.geometry.setPositions(flat);
+    pathObj.computeBoundingSphere?.();
+    const rec = getWBRecByGroup(group);
+    if (rec) updateFollowersForPath(rec);
+
+  } else {
+    const geom = new THREE.BufferGeometry().setFromPoints(pts);
+    pathObj.geometry?.dispose?.();
+    pathObj.geometry = geom;
+  }
+}
+
+
+// ===== [WB] PATHS — rebuildWBOrbit (ring + caps + center node) =====
+function rebuildWBOrbit(group){
+  const w = group?.userData?.workbench;
+  if (!w || w.type !== 'orbit') return;
+  group.updateMatrixWorld(true);
+
+  const P = w.params;
+  const ctr = P.center.clone();
+  const nrm = P.normal.clone().normalize();
+  const R   = P.radius;
+  const a0  = THREE.MathUtils.degToRad(P.startAngle ?? 0);
+  const a1  = THREE.MathUtils.degToRad(P.endAngle   ?? 180);
+
+  // basis for orbit plane (u,v)
+  const { u, v } = planeBasisFromNormal(nrm);
+
+  // cap positions from angles
+  const pStart = ctr.clone().addScaledVector(u, Math.cos(a0)*R).addScaledVector(v, Math.sin(a0)*R);
+  const pEnd   = ctr.clone().addScaledVector(u, Math.cos(a1)*R).addScaledVector(v, Math.sin(a1)*R);
+
+  const startCap = group.getObjectByName('WB_ORBIT_START');
+  const endCap   = group.getObjectByName('WB_ORBIT_END');
+  startCap?.position.copy(pStart);
+  endCap  ?.position.copy(pEnd);
+
+  // notify followers
+  const rec = (wbPrims || []).find(r => r.mesh === group);
+  if (rec) updateFollowersForPath(rec);
+  
+}
+
+
+
+
+// ----- delete helpers -------------------------------------------------------
+function isPathRecord(rec){
+  return rec && (rec.type === 'line' || rec.type === 'curve' || rec.type === 'orbit');
+}
+function isObjectRecord(rec){
+  return rec && !isPathRecord(rec); // primitives like plane/sphere/cube/etc.
+}
+function getObjectsAttachedToPath(pathId){
+  return wbPrims.filter(r => isObjectRecord(r) && r.mesh?.userData?.workbench?.follow?.pathId === pathId);
+}
+
+function disposeObject3D(obj){
+  try{
+    obj.traverse(o=>{
+      if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+      if (o.material){
+        if (Array.isArray(o.material)) o.material.forEach(m=>m?.dispose?.());
+        else o.material?.dispose?.();
+      }
+    });
+  }catch(e){}
+}
+
+
+function closeEditorIfEditing(rec){
+  try{
+    if (!wbEditing) return;
+    // If we’re editing this exact record, or its mesh was removed, close.
+    if (wbEditing === rec || wbEditing?.mesh === rec?.mesh){
+      closeWBEditor?.();
+    }
+  }catch(e){}
+}
+
+function removeWBRecord(rec){
+    closeEditorIfEditing(rec);
+  try{
+    // If the mesh is under a FOLLOW_RIG, remove the rig if it becomes empty
+    const mesh = rec.mesh;
+    const parent = mesh?.parent;
+    if (parent && /^FOLLOW_RIG_/.test(parent.name)){
+      parent.remove(mesh);
+      disposeObject3D(mesh);
+      // if rig has no other children, remove rig from scene
+      if (parent.parent) parent.parent.remove(parent);
+      disposeObject3D(parent);
+    } else {
+      if (mesh?.parent) mesh.parent.remove(mesh);
+      disposeObject3D(mesh);
+    }
+  }catch(e){}
+  const i = wbPrims.indexOf(rec);
+  if (i >= 0) wbPrims.splice(i,1);
+}
+
+
+// -- Path follow helpers ----------------------------------------------------
+function getFollowRigAndChild(obj){
+  if (!obj) return { rig:null, child:null };
+  if (obj.parent && /^FOLLOW_RIG_/.test(obj.parent.name)) {
+    return { rig: obj.parent, child: obj };
+  }
+  return { rig: null, child: obj };
+}
+
+
+function handleWBDelete(rec){
+  if (!rec) return;
+
+  // If deleting a PATH with attached objects -> delete both path and attached objects
+  if (isPathRecord(rec)){
+    const attached = getObjectsAttachedToPath(rec.id);
+    // delete objects first
+    for (const objRec of attached){
+      closeEditorIfEditing(objRec);
+      removeWBRecord(objRec);
+    }
+
+    // then the path
+    closeEditorIfEditing(rec);
+    removeWBRecord(rec);
+    refreshWBList();
+    return;
+  }
+
+  // Deleting an OBJECT
+  if (isObjectRecord(rec)){
+    closeEditorIfEditing(rec);
+    // If object is attached to a path -> delete object only
+    // If not attached -> delete object (same outcome)
+    removeWBRecord(rec);
+    refreshWBList();
+    return;
+  }
+}
+
+
+
+// ===== [WB] FOLLOW — ensure/return rig for object path attachment =====
+function ensureFollowRig(obj){
+  // Reuse if already under a follow rig
+  if (obj.parent && /^FOLLOW_RIG_/.test(obj.parent.name)) return obj.parent;
+
+  // Create a rig and put it in neutral space (wbGroup if available)
+  const rig = new THREE.Object3D();
+  rig.name = `FOLLOW_RIG_${(obj.userData?.workbench?.id || obj.uuid).slice(0,8)}`;
+
+  // Get object's current WORLD pose (so we can preserve it on reparent)
+  obj.updateMatrixWorld(true);
+  const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+  obj.matrixWorld.decompose(wp, wq, ws);
+
+  (wbGroup || scene).add(rig);
+  rig.position.copy(wp);
+  rig.quaternion.copy(wq);
+  rig.scale.set(1,1,1);
+  rig.updateMatrixWorld(true);
+
+  // Manual reparent: keep world appearance
+  // Put object under rig and zero local pos/rot; keep its scale
+  rig.add(obj);
+  obj.position.set(0,0,0);
+  obj.rotation.set(0,0,0);
+  obj.scale.copy(ws);
+  obj.updateMatrixWorld(true);
+
+  return rig;
+}
+
+
+
+
+// ===== [WB] FOLLOW — detach rig and bake world pose back =====
+function detachFollowRig(obj){
+  const { rig, child } = getFollowRigAndChild(obj);
+  if (!rig) return;
+
+  // Bake rig transform into child, then remove rig
+  rig.updateMatrixWorld(true);
+  const wpos = new THREE.Vector3(); const wquat = new THREE.Quaternion(); const wsca = new THREE.Vector3();
+  child.getWorldPosition(wpos); child.getWorldQuaternion(wquat); child.getWorldScale(wsca);
+
+  const parent = rig.parent;
+  if (parent) parent.add(child);
+  child.position.copy(wpos);
+  child.quaternion.copy(wquat);
+  child.scale.copy(wsca);
+
+  rig.remove(child);
+  parent && parent.remove(rig);
+}
+
+
+
+function snapObjectToPathStart(obj, pathRec){
+  // If following, move the rig; the object's local TRS remains user offsets.
+  const { rig } = getFollowRigAndChild(obj);
+  const target = rig || obj;
+
+  const frame = getPathStartFrame(pathRec);
+  target.position.copy(frame.pos);
+  target.quaternion.copy(frame.quat);
+}
+
+
+
+// Collect current paths from wbPrims
+function getWBPaths(){
+  if (!Array.isArray(wbPrims)) return [];
+  return wbPrims.filter(r => r && (r.type === 'line' || r.type === 'curve' || r.type === 'orbit'));
+}
+
+
+// UTILITIES BLOCK ----------------------------------------------------!!!!
+/* ===========================================================
+   ============ WORKBENCH PATH/FOLLOW UTILITIES ===============
+   (start)  Everything here is shared by line/curve/orbit
+   =========================================================== */
+// Compute a start-frame for a given path record's mesh (group)
+function getPathStartFrame(pathRec){
+  return getPathFrame(pathRec, 0);
+}
+
+
+// Return the pose {pos, quat} at parameter t in [0,1] for any path
+
+// ===== [WB] FOLLOW — sample path frame (pos/tangent -> quaternion) =====
+function getPathFrame(pathRec, t=0){
+  if (!pathRec?.mesh) return { pos:new THREE.Vector3(), quat:new THREE.Quaternion(), tangent:new THREE.Vector3(1,0,0), normalZ:new THREE.Vector3(0,0,1) };
+  const g  = pathRec.mesh;
+  const up = new THREE.Vector3(0,1,0);
+  const eps = 1e-6;
+
+  g.updateMatrixWorld(true);
+  const mw     = g.matrixWorld;                     // local->world
+  const nrmMat = new THREE.Matrix3().getNormalMatrix(mw);
+
+  // locals we’ll compute per path type
+  let posL    = new THREE.Vector3();
+  let tangentL= new THREE.Vector3(1,0,0);
+  let normalZL= new THREE.Vector3(0,0,1);
+
+  const w = g.userData?.workbench;
+  if (!w){
+    // identity local frame at origin
+    const Xw = tangentL.clone().applyMatrix3(nrmMat).normalize();
+    const Zw = normalZL.clone().applyMatrix3(nrmMat).normalize();
+    const Yw = new THREE.Vector3().crossVectors(Zw, Xw).normalize();
+    const posW = posL.clone().applyMatrix4(mw);
+    const mW = new THREE.Matrix4().makeBasis(Xw, Yw, Zw);
+    const quat = new THREE.Quaternion().setFromRotationMatrix(mW);
+    return { pos: posW, quat, tangent: Xw, normalZ: Zw };
+  }
+
+  if (w.type === 'line'){
+    const p0 = w.params.start.clone();
+    const p1 = w.params.end.clone();
+    const tt = THREE.MathUtils.clamp(t, 0, 1);
+    posL.lerpVectors(p0, p1, tt);
+    tangentL.copy(p1).sub(p0).normalize();
+    normalZL.crossVectors(tangentL, up);
+    if (normalZL.lengthSq() < eps) normalZL.set(0,0,1);
+  }
+  else if (w.type === 'curve'){
+    const p0 = w.params.start.clone();
+    const pc = w.params.control.clone();
+    const p2 = w.params.end.clone();
+    const curve = new THREE.QuadraticBezierCurve3(p0, pc, p2);
+    const tt = THREE.MathUtils.clamp(t, 0, 1);
+    posL.copy(curve.getPoint(tt));
+    tangentL.copy(curve.getTangent(tt)).normalize();
+    normalZL.crossVectors(tangentL, up);
+    if (normalZL.lengthSq() < eps) normalZL.set(0,0,1);
+  }
+    else if (w.type === 'orbit'){
+    const r = orbitLocalPosTan(w.params, t);
+    posL.copy(r.posL);
+    tangentL.copy(r.tanL);
+    normalZL.crossVectors(tangentL, r.nrmL).normalize();
+  }
+
+
+  // --- local -> world for ALL path types (unified) ---
+  const Xw = tangentL.clone().applyMatrix3(nrmMat).normalize();
+  const Zw = normalZL.clone().applyMatrix3(nrmMat).normalize();
+  const Yw = new THREE.Vector3().crossVectors(Zw, Xw).normalize();
+
+  const posW = posL.clone().applyMatrix4(mw);
+  const mW = new THREE.Matrix4().makeBasis(Xw, Yw, Zw);
+  const quat = new THREE.Quaternion().setFromRotationMatrix(mW);
+
+  return { pos: posW, quat, tangent: Xw, normalZ: Zw };
+}
+
+
+// find wbPrim record by its THREE.Group reference
+function getWBRecByGroup(group){
+  return (wbPrims || []).find(r => r.mesh === group) || null;
+}
+
+// --- world-space pose setter (avoids double-transform / parent transforms) ---
+function _setWorldPose(target, posW, quatW){
+  if (!target) return;
+  const parent = target.parent || scene;
+  // Ensure parent world is up-to-date
+  parent?.updateMatrixWorld?.(true);
+
+  // Compose desired world matrix from world pos+quat (unit scale)
+  const mW = new THREE.Matrix4().compose(
+    posW.clone(),
+    quatW.clone(),
+    new THREE.Vector3(1,1,1)
+  );
+
+  // Convert world matrix to parent-local
+  const invParent = new THREE.Matrix4().copy(parent.matrixWorld || new THREE.Matrix4()).invert();
+  mW.premultiply(invParent);
+
+  // Decompose into target's local TRS
+  mW.decompose(target.position, target.quaternion, target.scale);
+  target.updateMatrixWorld(true);
+}
+
+
+// move all objects that follow this path to their current t on the updated path
+
+// ===== [WB] FOLLOW — pose objects attached to a path on edits =====
+function updateFollowersForPath(pathRec){
+  if (!pathRec || !pathRec.mesh) return;
+
+  // Ensure the path world transform is fresh
+  pathRec.mesh.updateMatrixWorld(true);
+
+  const attached = (typeof getObjectsAttachedToPath === 'function')
+    ? getObjectsAttachedToPath(pathRec.id)
+    : (wbPrims || []).filter(r => r?.mesh?.userData?.workbench?.follow?.pathId === pathRec.id);
+
+  for (const objRec of attached){
+    const obj = objRec.mesh;
+    const follow = obj?.userData?.workbench?.follow;
+    const t = (follow && typeof follow.t === 'number') ? follow.t : 0;
+
+    // Pose the FOLLOW RIG (if present), not the child
+    const pair   = (typeof getFollowRigAndChild === 'function') ? getFollowRigAndChild(obj) : null;
+    const target = pair?.rig || obj;
+
+    // Per-t frame is our SSOT for orientation across all path types
+    const frame = getPathFrame(pathRec, t);
+
+    // === Position source of truth ===
+    // For orbits at t=0, prefer the actual green cap world position to eliminate tiny drift
+    let posW = frame.pos;
+    if (pathRec.type === 'orbit' && Math.abs(t) < 1e-6) {
+      const capStart = pathRec.mesh.getObjectByName('WB_ORBIT_START');
+      if (capStart) {
+        const capWorld = new THREE.Vector3();
+        capStart.getWorldPosition(capWorld);
+        posW = capWorld;
+      }
+    }
+
+    // --- Apply world pose to the rig, converting to parent-local (crucial)
+    const parent = target.parent || (typeof scene !== 'undefined' ? scene : null);
+    parent?.updateMatrixWorld?.(true);
+
+    const mWorld  = new THREE.Matrix4().compose(
+      posW.clone(),
+      frame.quat.clone(),
+      new THREE.Vector3(1,1,1)
+    );
+    const invParent = new THREE.Matrix4().copy(parent?.matrixWorld || new THREE.Matrix4()).invert();
+    mWorld.premultiply(invParent);
+
+    const tmpS = new THREE.Vector3();
+    mWorld.decompose(target.position, target.quaternion, tmpS);
+    target.scale.set(1,1,1); // keep rig neutral
+    target.updateMatrixWorld(true);
+  }
+}
+
+/* ===========================================================
+   === ANALYTIC DISTANCE HELPERS (primitives, local-space) ===
+   =========================================================== */
+
+// utility: clamp
+function _clamp(v, lo, hi){ return Math.min(hi, Math.max(lo, v)); }
+
+// Transform world -> local (returns {p, q, s} if you need them)
+function _toLocal(obj, worldPoint){
+  const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
+  return worldPoint.clone().applyMatrix4(inv);
+}
+
+/* Sphere (center at mesh local origin; radius r)
+   d < 0 = inside, 0 = surface, > 0 = outside */
+function distanceToSphere_local(localPoint, r){
+  return localPoint.length() - r;
+}
+
+/* OBB (oriented box) of half-extent hx,hy,hz centered at origin in local space */
+function distanceToOBB_local(localPoint, hx, hy, hz){
+  const qx = Math.abs(localPoint.x) - hx;
+  const qy = Math.abs(localPoint.y) - hy;
+  const qz = Math.abs(localPoint.z) - hz;
+  const outside = new THREE.Vector3(Math.max(qx,0), Math.max(qy,0), Math.max(qz,0));
+  const outsideLen = outside.length();
+  const insideMax = Math.max(qx, qy, qz);
+  return outsideLen + Math.min(insideMax, 0);
+}
+
+/* Plane (unit normal n, passing through origin in local space) */
+function distanceToPlane_local(localPoint, n /*THREE.Vector3*/){
+  return n.dot(localPoint);
+}
+
+/* Capsule (segment A->B in local, radius r) */
+function distanceToCapsule_local(localPoint, A, B, r){
+  const ab = new THREE.Vector3().subVectors(B, A);
+  const t = _clamp(new THREE.Vector3().subVectors(localPoint, A).dot(ab) / ab.lengthSq(), 0, 1);
+  const closest = new THREE.Vector3().copy(A).addScaledVector(ab, t);
+  return localPoint.distanceTo(closest) - r;
+}
+
+/* === World-space convenience wrappers ===
+   Pass: (meshLikeObject, worldPoint, params...) */
+function distanceToSphere_world(obj, worldPoint, r){
+  const pL = _toLocal(obj, worldPoint);
+  return distanceToSphere_local(pL, r);
+}
+function distanceToOBB_world(obj, worldPoint, hx, hy, hz){
+  const pL = _toLocal(obj, worldPoint);
+  return distanceToOBB_local(pL, hx, hy, hz);
+}
+function distanceToPlane_world(obj, worldPoint, nLocal){
+  const pL = _toLocal(obj, worldPoint);
+  return distanceToPlane_local(pL, nLocal);
+}
+function distanceToCapsule_world(obj, worldPoint, A, B, r){
+  const pL = _toLocal(obj, worldPoint);
+  return distanceToCapsule_local(pL, A, B, r);
+}
+
+/* === Broadphase helper (world AABB) ===
+   Returns {min,max} in world space for quick culling */
+function getWorldAABB(obj){
+  const box = new THREE.Box3().setFromObject(obj);
+  return { min: box.min.clone(), max: box.max.clone() };
+}
+
+/* === Example adapters for your WB primitives ===
+   (Use these when sampling T/D/Ls)
+
+   Sphere primitive:
+     - local radius stored on mesh.userData.workbench.params.radius (if you do that)
+     - else pass whatever radius you spawn with
+*/
+function wbDistance_Sphere_world(rec, worldPoint){
+  const mesh = rec.mesh;
+  const r = rec?.mesh?.geometry?.parameters?.radius ?? rec?.userData?.workbench?.params?.radius ?? 1;
+  return distanceToSphere_world(mesh, worldPoint, r);
+}
+
+/* Box primitive (Cube/Plane variants): read half extents from geometry if available */
+function wbDistance_Box_world(rec, worldPoint){
+  const mesh = rec.mesh;
+  const pars = mesh?.geometry?.parameters || {};
+  const hx = (pars.width  ? pars.width  * 0.5 : 0.5);
+  const hy = (pars.height ? pars.height * 0.5 : 0.5);
+  const hz = (pars.depth  ? pars.depth  * 0.5 : 0.5);
+  return distanceToOBB_world(mesh, worldPoint, hx, hy, hz);
+}
+
+/* Capsule from a line path segment (start/end in local space, radius r) */
+function wbDistance_CapsuleFromLine_world(lineRec, worldPoint, r){
+  // Derive local A,B for the line group: use start/end in params (local)
+  const g = lineRec.mesh;
+  const P = g?.userData?.workbench?.params;
+  if (!P?.start || !P?.end) return Infinity;
+  const A = P.start, B = P.end;
+  return distanceToCapsule_world(g, worldPoint, A, B, r);
+}
+
+/* ===========================================================
+   === BVH HELPERS (three-mesh-bvh; lazy-loaded in browser) ===
+   =========================================================== */
+window.__WB_BVH = window.__WB_BVH || {
+  loaded: false,
+  loading: false,
+  api: null
+};
+
+async function _ensureBVH(){
+  if (window.__WB_BVH.loaded) return window.__WB_BVH.api;
+  if (window.__WB_BVH.loading) {
+    // poll a few times
+    for (let i=0;i<50;i++){
+      await new Promise(r => setTimeout(r, 50));
+      if (window.__WB_BVH.loaded) return window.__WB_BVH.api;
+    }
+  }
+  window.__WB_BVH.loading = true;
+  // ESM build on unpkg; pinned minor is fine — adjust if you prefer another CDN
+  const mod = await import('https://unpkg.com/three-mesh-bvh@0.7.5/build/index.module.js');
+  // Patch BufferGeometry with bounds tree helpers (standard pattern)
+  THREE.BufferGeometry.prototype.computeBoundsTree = mod.computeBoundsTree;
+  THREE.BufferGeometry.prototype.disposeBoundsTree  = mod.disposeBoundsTree;
+  THREE.Mesh.prototype.raycast = mod.acceleratedRaycast;
+
+  window.__WB_BVH.api = mod;
+  window.__WB_BVH.loaded = true;
+  window.__WB_BVH.loading = false;
+  return mod;
+}
+
+/* Build (or rebuild) a BVH for a mesh’s geometry */
+async function buildMeshBVH(mesh){
+  const mod = await _ensureBVH();
+  const geom = mesh?.geometry;
+  if (!geom || !geom.isBufferGeometry) throw new Error('BVH: mesh has no BufferGeometry');
+  if (!geom.attributes.position) throw new Error('BVH: geometry missing position attribute');
+  if (!geom.index){
+    // ensure indexed to improve BVH quality
+    geom.setIndex(THREE.BufferGeometryUtils?.mergeVertices
+      ? THREE.BufferGeometryUtils.mergeVertices(geom).getIndex()
+      : geom.toNonIndexed().getIndex()); // fallback
+  }
+  geom.computeBoundsTree({ strategy: mod.BVH_BUILD_STRATEGY.SAH });
+  return geom.boundsTree;
+}
+
+/* Closest point & distance from world point to mesh surface (BVH) */
+async function closestDistanceToMesh_world(mesh, worldPoint){
+  await _ensureBVH();
+  // Transform world point to mesh local once
+  const localPoint = _toLocal(mesh, worldPoint);
+  const geom = mesh.geometry;
+  if (!geom.boundsTree) await buildMeshBVH(mesh);
+
+  // Use the provided helper if available; else manual traversal
+  const mod = window.__WB_BVH.api;
+
+  // Fallback closest-point utility (newer versions export this; if not, use BVH.castPoint)
+  if (mod.closestPointToGeometry){
+    const res = mod.closestPointToGeometry(localPoint, geom, geom.boundsTree);
+    // res = { distance, closestPoint, faceIndex, normal }
+    const cpWorld = res.closestPoint.clone().applyMatrix4(mesh.matrixWorld);
+    return { distance: res.distance, pointWorld: cpWorld, faceIndex: res.faceIndex };
+  } else {
+    // Approx via boundsTree tron: castPoint API pattern
+    let minDist = Infinity, best = new THREE.Vector3();
+    geom.boundsTree.shapecast({
+      intersectsBounds: box => true,
+      intersectsTriangle: tri => {
+        const p = tri.closestPointToPoint(localPoint, new THREE.Vector3());
+        const d = p.distanceTo(localPoint);
+        if (d < minDist){ minDist = d; best.copy(p); }
+        return false;
+      }
+    });
+    if (minDist === Infinity) return { distance: Infinity, pointWorld: null, faceIndex: -1 };
+    const cpWorld = best.applyMatrix4(mesh.matrixWorld);
+    return { distance: minDist, pointWorld: cpWorld, faceIndex: -1 };
+  }
+}
+
+/* ===========================================================
+   === Dome-based Units (DD / DM / DC / uDD) + Overscan ======
+   =========================================================== */
+
+// Effective dome diameter in WU (best effort)
+function _measureDomeDiameterWU(){
+  try{
+    const domeMesh = (typeof getDomeMesh === 'function') ? getDomeMesh() : (window.domeMesh || null);
+    if (domeMesh?.geometry?.parameters?.radius){
+      return 2 * Number(domeMesh.geometry.parameters.radius);
+    }
+    const g = domeMesh?.geometry;
+    if (g){
+      g.computeBoundingSphere?.();
+      if (g.boundingSphere?.radius) return 2 * g.boundingSphere.radius;
+    }
+  }catch(e){}
+  // Fallback consistent with your scene scale
+  return getDomeRadiusFallback(250) * 2;
+}
+
+// Overscanned DD: a bit larger than the measured dome
+function _worldPerDD(overscan = 1.10){
+  return _measureDomeDiameterWU() * Number(overscan);
+}
+
+
+/* ===========================================================
+   =============== BENCH EXPORT / IMPORT (JSON) ===============
+   =========================================================== */
+
+// tiny helpers
+function _vecToArr(v){ return [Number(v.x)||0, Number(v.y)||0, Number(v.z)||0]; }
+function _arrToVec(a){ return new THREE.Vector3(a[0]||0, a[1]||0, a[2]||0); }
+function _eulToArr(e){ return [THREE.MathUtils.radToDeg(e.x), THREE.MathUtils.radToDeg(e.y), THREE.MathUtils.radToDeg(e.z)]; }
+function _arrToEul(a){ return new THREE.Euler(THREE.MathUtils.degToRad(a[0]||0), THREE.MathUtils.degToRad(a[1]||0), THREE.MathUtils.degToRad(a[2]||0)); }
+
+/* >>> translate and cpature TRS <<< */
+function _bakePathTRSIntoParams(group, THREE) {
+  const wb = group?.userData?.workbench;
+  if (!wb) return;
+  const M  = group.matrix.clone();            // local -> parent
+  const M3 = new THREE.Matrix3().setFromMatrix4(M);
+
+  if (wb.type === 'line' && wb.params?.start && wb.params?.end) {
+    const p0 = wb.params.start.clone().applyMatrix4(M);
+    const p1 = wb.params.end  .clone().applyMatrix4(M);
+    wb.params.start.copy(p0);
+    wb.params.end  .copy(p1);
+  }
+
+  if (wb.type === 'curve' && wb.params?.start && wb.params?.control && wb.params?.end) {
+    const p0 = wb.params.start  .clone().applyMatrix4(M);
+    const pc = wb.params.control.clone().applyMatrix4(M);
+    const p1 = wb.params.end    .clone().applyMatrix4(M);
+    wb.params.start  .copy(p0);
+    wb.params.control.copy(pc);
+    wb.params.end    .copy(p1);
+  }
+
+  if (wb.type === 'orbit' && wb.params) {
+    const P = wb.params;
+    const centerL = (P.center || new THREE.Vector3()).clone();
+    const normalL = (P.normal || new THREE.Vector3(0,1,0)).clone().normalize();
+    const R       = Number(P.radius || 1);
+
+    // center as point
+    const centerP = centerL.clone().applyMatrix4(M);
+
+    // build local plane basis (u,v) from normal
+    const up  = new THREE.Vector3(0,1,0);
+    const tmp = Math.abs(normalL.dot(up)) > 0.999 ? new THREE.Vector3(1,0,0) : up.clone();
+    //const uL  = new THREE.Vector3().crossVectors(normalL, tmp).normalize();
+    //const vL  = new THREE.Vector3().crossVectors(normalL, uL).normalize();
+
+    // estimate scaled radius by transforming two rim points
+    // Use the same deterministic basis the viewport uses
+    const { u: uL, v: vL } = planeBasisFromNormal(normalL);
+    // Define 0° along +u; radius = distance center->(center + u*R) under M
+    const A_parent = centerL.clone().addScaledVector(uL, R).applyMatrix4(M);
+    const R_parent = A_parent.distanceTo(centerP);
+
+    // normal as direction (no translation)
+    const nP = normalL.applyMatrix3(M3).normalize();
+
+    P.center = centerP;
+    P.normal = nP;
+    P.radius = R_parent;
+    // keep startAngle/endAngle (they’re defined in the orbit’s plane)
+  }
+}
+
+
+function downloadJSON(obj, filename){
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename || 'bench.bench.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 100);
+}
+
+function pickJSONFile(){
+  return new Promise((resolve)=>{
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,.bench.json,application/json';
+    input.onchange = () => resolve(input.files && input.files[0]);
+    input.click();
+  });
+}
+
+/** Build bench JSON from current WB state */
+
+// ===== [WB] EXPORT — buildBenchJSON (self-describing bench manifest) =====
+function buildBenchJSON(){
+  // Dome (best effort; fall back to defaults)
+  let dome = { radius: 250, segments: [64,64], origin: [0,0,0] };
+  
+  // ===== Self-describing header + units (CANON) =====
+  // Canon: 1 DD = 100 WU (fixed; independent of dome size)
+  const overscanDD = null;
+  const worldPerDD = 700;                       // 1 DD = 700 WU
+
+  const manifest = {
+    kind: "ripper-bench",
+    specVersion: "1.0",
+    description: "Workbench export for vibe-to-ripp generation (self-describing)."
+  };
+
+  const rippContract = {
+    target: "ripp@1",
+    moduleFormat: "esm",
+    entryFile: "Ripps/_index.js",
+    expects: {
+      paths: ["line","curve","orbit","parametric"],
+      objects: ["plane","cube","sphere","cone","cylinder"],
+      units: "worldUnits",
+      upAxis: "Y",
+      handedness: "right"
+    },
+    intentsSchema: {
+      spawner: ["spawnEveryMs","maxInstances","startDelayMs","posJitter","rotJitterDeg","scaleJitter"],
+      motionDefaults: ["moveMode","durationMs","easing","align","upMode","scaleMode"],
+      lifecycle: ["spawnAtStart","destroyAtEnd","dwellStartMs","dwellEndMs"],
+      collision: ["applyTo","with","evaluator","radius","falloff","blend","color"],
+      fanout: ["count","path","phaseMode"],
+      pathMutate: ["path","modifiers"]
+    },
+    defaults: {
+      moveMode: "traverse",
+      durationMs: 2000,
+      easing: "linear",
+      spawnEveryMs: null,
+      destroyAtEnd: true,
+      collisionEnabled: false
+    }
+  };
+
+  // WU-first, simple, unambiguous
+  const units = {
+    base: 'WU',
+    // Keep legacy numbers only as *metadata* to avoid confusion in clients:
+    worldPerDD,        // optional: still useful to know your dome size in WU
+    overscanWU: overscanDD != null ? overscanDD * worldPerDD : null, // derived, if you use overscan
+    scales: { WU: 1 }, // no alternate “scales” that imply other bases
+    angle: 'deg',
+    time:  'ms',
+    notes: 'Stored values are WU. (Legacy DD/DM/DC removed from scales.)'
+  };
+
+
+  const aliases = {
+    "ring": "orbit-*",
+    "planes": "plane-*",
+    "line A": "line-001"
+  };
+
+  try {
+    const domeMesh = (typeof getDomeMesh === 'function') ? getDomeMesh() : (window.domeMesh || null);
+    const pars = domeMesh?.geometry?.parameters;
+    if (pars?.radius) dome.radius = pars.radius;
+    if (pars?.widthSegments && pars?.heightSegments) dome.segments = [pars.widthSegments, pars.heightSegments];
+  } catch(e){}
+
+  // Separate WB records
+  const paths = [];
+  const objects = [];
+  const attachments = [];
+
+  (wbPrims || []).forEach(rec=>{
+    const wb = rec?.mesh?.userData?.workbench;
+    if (!wb) return;
+    const t = wb.type;
+    if (t === 'line' || t === 'curve' || t === 'orbit'){
+       // Bake any local TRS from the path group into its params before reading them
+      rec.mesh.updateMatrixWorld(true); _bakePathTRSIntoParams(rec.mesh, THREE);
+      // PATH
+      const P = wb.params || {};
+      const out = { id: wb.id || rec.id, type: t, params: {} };
+      if (t === 'line'){
+        out.params.start = _vecToArr(P.start || new THREE.Vector3());
+        out.params.end   = _vecToArr(P.end   || new THREE.Vector3());
+      } else if (t === 'curve'){
+        out.params.start   = _vecToArr(P.start   || new THREE.Vector3());
+        out.params.control = _vecToArr(P.control || new THREE.Vector3());
+        out.params.end     = _vecToArr(P.end     || new THREE.Vector3());
+      } else if (t === 'orbit'){
+        out.params.center     = _vecToArr(P.center || new THREE.Vector3());
+        out.params.normal     = _vecToArr(P.normal || new THREE.Vector3(0,1,0));
+        out.params.radius     = Number(P.radius || 100);
+        out.params.startAngle = Number(P.startAngle || 0);
+        out.params.endAngle   = Number(P.endAngle   || 360);
+      }
+      paths.push(out);
+    } else {
+      // OBJECT
+      // If under a follow rig, export the CHILD's local TRS (we zero pos/rot on attach)
+      const child = (rec.mesh.parent && /^FOLLOW_RIG_/.test(rec.mesh.parent.name)) ? rec.mesh : rec.mesh;
+      const tr = {
+        position: _vecToArr(child.position),
+        rotation: _eulToArr(child.rotation),
+        scale:    _vecToArr(child.scale)
+      };
+
+      const _baseWU = getBaseSize(child);           // local base size (WU)
+      const _absWU  = new THREE.Vector3(            // absolute world size (WU)
+        _baseWU.x * child.scale.x,
+        _baseWU.y * child.scale.y,
+        _baseWU.z * child.scale.z
+      );
+
+    const safeId = wb.id || rec.id || ensureWBId(rec.mesh, t, rec);
+    const objOut = {
+      id: safeId,
+      type: t,
+      params: {},
+      transform: tr,
+      material: { baseColor: rec.mesh.userData?.colorHex || '#ffffff' }
+    };
+
+
+  // Append absolute size in WU for debug/consumers
+  try {
+    const __box = new THREE.Box3().setFromObject(rec.mesh);
+    const __size = __box.getSize(new THREE.Vector3());
+    objOut.params = objOut.params || {};
+    objOut.params.sizeWU = [Number(__size.x.toFixed(3)), Number(__size.y.toFixed(3)), Number(__size.z.toFixed(3))];
+    if (objOut.type === 'sphere') {
+      objOut.params.radiusWU = Number((Math.max(__size.x,__size.y,__size.z) * 0.5).toFixed(3));
+    }
+  } catch(e) {}
+
+      objects.push(objOut);
+
+      // ATTACHMENT (if follow exists)
+      if (wb.follow && wb.follow.pathId){
+        const f = wb.follow;
+        attachments.push({
+          objectId: objOut.id,
+          pathId: f.pathId,
+          follow: {
+            t: Number(f.t || 0),
+            align: f.align || 'perp',
+            upMode: f.upMode || 'world',
+            loop: !!f.loop,
+            reverse: !!f.reverse
+          }
+        });
+      }
+    }
+  });
+
+    return {
+    benchVersion: 1,
+    name: (document.title || 'workbench'),
+    manifest,
+    rippContract,
+    units,
+    dome,
+    aliases,
+    paths,
+    objects,
+    attachments,
+    // Boilerplate defaults (can be edited later by vibes)
+    intents: [
+      {
+        type: "motionDefaults",
+        applyTo: "allAttached",
+        moveMode: "traverse",
+        durationMs: 2000,
+        easing: "linear",
+        align: "perp",
+        upMode: "world",
+        scaleMode: "relativeToPath"
+      },
+      {
+        type: "lifecycle",
+        applyTo: "allAttached",
+        spawnAtStart: true,
+        destroyAtEnd: true,
+        dwellStartMs: 0,
+        dwellEndMs: 0
+      },
+      {
+        type: "spawner",
+        applyTo: "none",
+        spawnEveryMs: null,
+        maxInstances: 64,
+        startDelayMs: 0,
+        posJitter: [0,0,0],
+        rotJitterDeg: [0,0,0],
+        scaleJitter: [0,0,0]
+      },
+      {
+        type: "collision",
+        applyTo: "none",
+        with: "dome",
+        evaluator: "auto",
+        radius: "20DM",
+        falloff: "smoothstep",
+        blend: "max",
+        color: "randomPalette"
+      }
+    ]
+  };
+
+}
+
+/** Load bench JSON into current WB (non-destructive: adds to what’s there) */
+async function loadBenchJSON(bench){
+  if (!bench) throw new Error('No bench data');
+
+  // 1) Create paths first
+  const createdPathsById = new Map();
+  for (const p of (bench.paths || [])){
+    let rec = null;
+    if (p.type === 'line'){
+      rec = createPrimitive('line'); // creates with defaults
+      // apply params & rebuild
+      const g = rec.mesh;
+      const wb = g.userData.workbench;
+      wb.id = p.id || wb.id;
+      wb.params.start = _arrToVec(p.params.start || [0,0,0]);
+      wb.params.end   = _arrToVec(p.params.end   || [0,0,0]);
+      rebuildWBLine(g);
+    } else if (p.type === 'curve'){
+      rec = createPrimitive('curve');
+      const g = rec.mesh;
+      const wb = g.userData.workbench;
+      wb.id = p.id || wb.id;
+      wb.params.start   = _arrToVec(p.params.start   || [0,0,0]);
+      wb.params.control = _arrToVec(p.params.control || [0,0,0]);
+      wb.params.end     = _arrToVec(p.params.end     || [0,0,0]);
+      rebuildWBCurve(g);
+    } else if (p.type === 'orbit'){
+      rec = createPrimitive('orbit');
+      const g = rec.mesh;
+      const wb = g.userData.workbench;
+      wb.id = p.id || wb.id;
+      wb.params.center     = _arrToVec(p.params.center     || [0,0,0]);
+      wb.params.normal     = _arrToVec(p.params.normal     || [0,1,0]).normalize();
+      wb.params.radius     = Number(p.params.radius || 100);
+      wb.params.startAngle = Number(p.params.startAngle || 0);
+      wb.params.endAngle   = Number(p.params.endAngle   || 360);
+      rebuildWBOrbit(g);
+    }
+    if (rec) createdPathsById.set(rec.mesh.userData.workbench.id, rec);
+  }
+
+  // 2) Create objects
+  const createdObjsById = new Map();
+  for (const o of (bench.objects || [])){
+    const rec = createPrimitive(o.type || 'plane'); // plane/sphere/cube/etc.
+    const wb = rec.mesh.userData.workbench;
+    wb.id = o.id || wb.id;
+
+    // apply child local TRS
+    const { rig, child } = (typeof getFollowRigAndChild === 'function') ? getFollowRigAndChild(rec.mesh) : { rig:null, child: rec.mesh };
+    child.position.copy(_arrToVec(o.transform?.position || [0,0,0]));
+    child.rotation.copy(_arrToEul(o.transform?.rotation || [0,0,0]));
+    const scl = _arrToVec(o.transform?.scale || [1,1,1]);
+    child.scale.set(scl.x, scl.y, scl.z);
+    child.updateMatrixWorld(true);
+
+    createdObjsById.set(wb.id, rec);
+    refreshWBList?.();
+  }
+
+  // 3) Attachments
+  for (const a of (bench.attachments || [])){
+    const objRec  = createdObjsById.get(a.objectId);
+    const pathRec = createdPathsById.get(a.pathId);
+    if (!objRec || !pathRec) continue;
+
+    // follow config
+    const obj = objRec.mesh;
+    obj.userData.workbench.follow = {
+      pathId: pathRec.mesh.userData.workbench.id,
+      t: Number(a.follow?.t || 0),
+      upMode: a.follow?.upMode || 'world',
+      align:  a.follow?.align  || 'perp',
+      loop: !!a.follow?.loop,
+      reverse: !!a.follow?.reverse,
+      offset: {
+        position: new THREE.Vector3(0,0,0),
+        rotation: new THREE.Euler(0,0,0),
+        scale:    obj.scale.clone()
+      }
+    };
+
+    // ensure rig + zero child
+    const rig = ensureFollowRig(obj);
+    const pair = (typeof getFollowRigAndChild === 'function') ? getFollowRigAndChild(obj) : { rig, child: obj };
+    const target = pair.rig || rig || obj;
+    const child  = pair.child || obj;
+    child.position.set(0,0,0);
+    child.rotation.set(0,0,0);
+    child.updateMatrixWorld(true);
+
+    // pose at start using same attach logic (cap position + frame orientation)
+    pathRec.mesh.updateMatrixWorld(true);
+
+    // prefer green cap world pos for orbit start
+    let posW = null;
+    if (pathRec.type === 'orbit' && Math.abs(obj.userData.workbench.follow.t) < 1e-6){
+      const capStart = pathRec.mesh.getObjectByName('WB_ORBIT_START');
+      if (capStart){
+        posW = new THREE.Vector3();
+        capStart.getWorldPosition(posW);
+      }
+    }
+    const frame = getPathFrame(pathRec, obj.userData.workbench.follow.t || 0);
+    if (!posW) posW = frame.pos.clone();
+
+    // world->parent local set
+    const parent = target.parent || (typeof scene !== 'undefined' ? scene : null);
+    parent?.updateMatrixWorld?.(true);
+    const mWorld  = new THREE.Matrix4().compose(posW.clone(), frame.quat.clone(), new THREE.Vector3(1,1,1));
+    const invParent = new THREE.Matrix4().copy(parent?.matrixWorld || new THREE.Matrix4()).invert();
+    mWorld.premultiply(invParent);
+    const tmpS = new THREE.Vector3();
+    mWorld.decompose(target.position, target.quaternion, tmpS);
+    target.scale.set(1,1,1);
+    target.updateMatrixWorld(true);
+  }
+
+  refreshWBList?.();
+}
+
+
+// --- Plane size logger (world units + ratio to dome diameter)
+function wbLogPlaneSize(recOrMesh){
+  const rec = recOrMesh?.mesh ? recOrMesh : { mesh: recOrMesh };
+  const root = rec?.mesh;
+  if (!root){ console.warn('[WB] wbLogPlaneSize: no mesh'); return; }
+
+  // if under a follow rig, measure the child, not the rig
+  let target = root;
+  if (typeof getFollowRigAndChild === 'function'){
+    const pair = getFollowRigAndChild(root);
+    if (pair?.child) target = pair.child;
+  }
+
+  // try to find an actual Plane mesh under the group
+  let planeMesh = target;
+  if (!planeMesh.isMesh || !(planeMesh.geometry && planeMesh.geometry.type === 'PlaneGeometry')){
+    planeMesh = target.getObjectByProperty?.('type', 'Mesh') || target;
+  }
+
+  planeMesh.updateMatrixWorld(true);
+  const box  = new THREE.Box3().setFromObject(planeMesh);
+  const size = new THREE.Vector3(); box.getSize(size);
+
+  // dome diameter (WU)
+  let domeDiamWU = undefined;
+  try{
+    const dm = (getDomeMesh?.() || window.domeMesh)?.geometry?.parameters;
+    if (dm?.radius) domeDiamWU = dm.radius * 2;
+  }catch(e){}
+
+  const ratioX = domeDiamWU ? (size.x / domeDiamWU) : undefined;
+  const ratioY = domeDiamWU ? (size.y / domeDiamWU) : undefined;
+
+  console.log('[WB] Plane world size:',
+    { widthWU: +size.x.toFixed(3), heightWU: +size.y.toFixed(3), depthWU: +size.z.toFixed(3) });
+
+  if (domeDiamWU){
+    console.log('[WB] Relative to dome diameter:',
+      { domeDiamWU: +domeDiamWU.toFixed(3),
+        width_vs_DD: +ratioX.toFixed(4), height_vs_DD: +ratioY.toFixed(4) });
+  } else {
+    console.warn('[WB] Dome diameter unavailable; showing WU only.');
+  }
+}
+
+
+/* ===== Workbench Editor (floating) ===== */
+const WB_DEG = THREE.MathUtils.radToDeg;
+const WB_RAD = THREE.MathUtils.degToRad;
+
+const wbEditor = document.getElementById('wbEditor');
+const wbEditorTitle = document.getElementById('wbEditorTitle');
+const wbEditorClose = document.getElementById('wbEditorClose');
+const wbEditorReset = document.getElementById('wbEditorReset');
+const wbBenchExport = document.getElementById('wbBenchExport');
+const wbBenchImport = document.getElementById('wbBenchImport');
+
+// --- Normalize old "Bake Ripp" button -> "Bake Bench" (export bench JSON)
+const wbBakeRipp = document.getElementById('wbBakeRipp'); // existing bottom button
+if (wbBakeRipp){
+  wbBakeRipp.textContent = 'Bake Bench';
+  wbBakeRipp.title = 'Export current Workbench as .bench.json';
+  (()=>{
+    const wbBakeRipp = document.getElementById('wbBakeRipp'); // existing bottom button
+    if (wbBakeRipp){
+      wbBakeRipp.textContent = 'Bake Bench';
+      wbBakeRipp.title = 'Export current Workbench as .bench.json';
+      // ensure no legacy inline handler remains
+      wbBakeRipp.removeAttribute('onclick');
+    }
+  })();
+}
+
+
+// Object/Path mode select
+const wbObjPathSelect = document.getElementById('wbObjPathSelect');
+// We’ll hide/show Position row when switching modes
+const wbObjModeRow    = document.getElementById('wbObjModeRow');
+
+// Line-specific editor section & fields
+const wbEditorLine = document.getElementById('wbEditorLine');
+const lSX = document.getElementById('wbLStartX');
+const lSY = document.getElementById('wbLStartY');
+const lSZ = document.getElementById('wbLStartZ');
+const lEX = document.getElementById('wbLEndX');
+const lEY = document.getElementById('wbLEndY');
+const lEZ = document.getElementById('wbLEndZ');
+
+// Curve-specific editor section & fields
+const wbEditorCurve = document.getElementById('wbEditorCurve');
+const cSX = document.getElementById('wbCStartX');
+const cSY = document.getElementById('wbCStartY');
+const cSZ = document.getElementById('wbCStartZ');
+const cCX = document.getElementById('wbCCtrlX');
+const cCY = document.getElementById('wbCCtrlY');
+const cCZ = document.getElementById('wbCCtrlZ');
+const cEX = document.getElementById('wbCEndX');
+const cEY = document.getElementById('wbCEndY');
+const cEZ = document.getElementById('wbCEndZ');
+
+// Orbit-specific editor section & fields
+const wbEditorOrbit = document.getElementById('wbEditorOrbit');
+const oStartDeg = document.getElementById('wbOStartDeg');
+const oEndDeg   = document.getElementById('wbOEndDeg');
+
+
+// The three generic rows so we can hide them for lines
+function findEditorRowByLabel(startsWith){
+  const rows = Array.from(document.querySelectorAll('#wbEditor .body .row'));
+  const key = String(startsWith).toLowerCase();
+  return rows.find(r => (r.querySelector('label')?.textContent || '')
+    .trim().toLowerCase().startsWith(key)) || null;
+}
+const wbRowPosition = findEditorRowByLabel('position');
+const wbRowRotation = findEditorRowByLabel('rotation');
+const wbRowScale    = findEditorRowByLabel('size') || findEditorRowByLabel('scale');
+
+const posX = document.getElementById('wbPosX');
+const posY = document.getElementById('wbPosY');
+const posZ = document.getElementById('wbPosZ');
+const rotX = document.getElementById('wbRotX');
+const rotY = document.getElementById('wbRotY');
+const rotZ = document.getElementById('wbRotZ');
+const sclX = document.getElementById('wbSclX');
+const sclY = document.getElementById('wbSclY');
+const sclZ = document.getElementById('wbSclZ');
+
+// Live-update bindings for editor inputs (position, rotation, size)
+(function bindWBEditorLiveInputs(){
+  const inputs = [posX,posY,posZ, rotX,rotY,rotZ, sclX,sclY,sclZ].filter(Boolean);
+  const handler = function __wbLiveApply(){
+    if (!wbEditing) return;
+    // We only use _applyTo for objects (paths have their own editors)
+    if (wbEditing.type === 'line' || wbEditing.type === 'curve' || wbEditing.type === 'orbit') return;
+    _applyTo(wbEditing.mesh);
+  };
+  ['input','change'].forEach(ev=>{
+    inputs.forEach(inp=>{
+      try {
+        inp.removeEventListener(ev, handler);
+        inp.addEventListener(ev, handler);
+      } catch(e){}
+    });
+  });
+})();
+
+
+// --- Size helpers (DM canon: 1 DM = 7 WU) ---
+// (wrapped & idempotent so re-inserting won't break anything)
+//if (typeof window.WB_DM_WU === 'undefined') window.WB_DM_WU = 14;
+//if (typeof window.dm2wu !== 'function') window.dm2wu = (n)=> Number(n) * window.WB_DM_WU;
+//if (typeof window.wu2dm !== 'function') window.wu2dm = (n)=> Number(n) / window.WB_DM_WU;
+
+// Unscaled local size (WU) for first Mesh child (idempotent)
+if (typeof window._geomLocalSizeWU !== 'function') {
+  window._geomLocalSizeWU = function _geomLocalSizeWU(obj){
+    const mesh = (obj && obj.isMesh ? obj
+      : (obj?.children || []).find(c => c.isMesh && c.geometry)) || null;
+    const g = mesh && mesh.geometry;
+    if (!g) return new THREE.Vector3(1,1,1);
+    if (!g.boundingBox) g.computeBoundingBox();
+    const size = new THREE.Vector3();
+    g.boundingBox.getSize(size); // local space, scale=1
+    return size;
+  };
+}
+
+// Current object size in WU (base * current scale), rotation-agnostic (idempotent)
+if (typeof window._currentSizeWU_fromLocalBase !== 'function') {
+  window._currentSizeWU_fromLocalBase = function _currentSizeWU_fromLocalBase(obj){
+    const base = window._geomLocalSizeWU(obj);
+    const s = obj?.scale || { x:1, y:1, z:1 };
+    return new THREE.Vector3(base.x * s.x, base.y * s.y, base.z * s.z);
+  };
+}
+
+
+// --- Size units canon: 1 DM = 7 WU (and 1 DD = 700 WU = 100 DM)
+const WB_DM_WU = 1;
+function dm2wu(n){ return Number(n) * WB_DM_WU; }
+function wu2dm(n){ return Number(n) / WB_DM_WU; }
+
+// Cache per-object unscaled (base) size so we can convert absolute size <-> scale
+function getBaseSize(obj){
+  const wb = obj.userData.workbench || (obj.userData.workbench = {});
+  if (wb.baseSize && wb.baseSize.isVector3) return wb.baseSize.clone();
+
+  // Approximate base size by dividing current world size by current scale.
+  // (Good for our primitives; robust enough for grouped meshes we use here.)
+  const box = new THREE.Box3().setFromObject(obj);
+  const sizeWU = new THREE.Vector3(); box.getSize(sizeWU);
+
+  const sx = (obj.scale?.x || 1) || 1;
+  const sy = (obj.scale?.y || 1) || 1;
+  const sz = (obj.scale?.z || 1) || 1;
+
+  const base = new THREE.Vector3(
+    sizeWU.x / (sx || 1),
+    sizeWU.y / (sy || 1),
+    sizeWU.z / (sz || 1)
+  );
+  wb.baseSize = base.clone();
+  return base;
+}
+
+
+let wbEditing = null; // { id, name, type, mesh }
+
+function _safe(v, def=0){ const n=Number(v); return Number.isFinite(n)?n:def; }
+
+// ===== [WB] SIZE IO — populate Position/Rotation/Size fields (DM) =====
+function _populateFrom(obj){
+  posX.value = obj.position.x.toFixed(3);
+  posY.value = obj.position.y.toFixed(3);
+  posZ.value = obj.position.z.toFixed(3);
+  rotX.value = WB_DEG(obj.rotation.x).toFixed(1);
+  rotY.value = WB_DEG(obj.rotation.y).toFixed(1);
+  rotZ.value = WB_DEG(obj.rotation.z).toFixed(1);
+  // Absolute size (WU) = baseSize * current scale; display as DM
+  const _base = getBaseSize(obj);
+  // Absolute size in WU (no units conversion)
+  const _curWU = _currentSizeWU_fromLocalBase(obj);
+  sclX.value = _curWU.x.toFixed(3);
+  sclY.value = _curWU.y.toFixed(3);
+  sclZ.value = _curWU.z.toFixed(3);
+
+}
+
+
+
+// ===== [WB] SIZE IO — apply Position/Rotation/Size back to object =====
+function _applyTo(obj){
+  // Read editor fields
+  const px = _safe(posX?.value, 0), py = _safe(posY?.value, 0), pz = _safe(posZ?.value, 0);
+  const rx = WB_RAD(_safe(rotX?.value, 0)), ry = WB_RAD(_safe(rotY?.value, 0)), rz = WB_RAD(_safe(rotZ?.value, 0));
+
+  // AFTER (values are already WU)
+  const wantWU = new THREE.Vector3(
+    Math.max(0.0001, _safe(sclX?.value, 1)),
+    Math.max(0.0001, _safe(sclY?.value, 1)),
+    Math.max(0.0001, _safe(sclZ?.value, 1))
+  );
+
+  // Local, unscaled base size (WU) from the object's primary mesh
+  const base = _geomLocalSizeWU(obj);      // e.g. plane geometry size in WU when scale=1
+  const EPS = 1e-6;
+  const sx = (base.x > EPS) ? (wantWU.x / base.x) : obj.scale.x;
+  const sy = (base.y > EPS) ? (wantWU.y / base.y) : obj.scale.y;
+  const sz = (base.z > EPS) ? (wantWU.z / base.z) : obj.scale.z;
+
+  // Apply P/R/S
+  obj.position.set(px, py, pz);
+  obj.rotation.set(rx, ry, rz);
+  obj.scale.set(sx, sy, sz);
+  obj.updateMatrixWorld(true);
+
+  // Orbit behaves like an object: if we edited an orbit itself, rebuild its curve
+  try{
+    const wb = obj?.userData?.workbench;
+    if (wb && wb.type === 'orbit') {
+      rebuildWBOrbit(obj); // this emits follower updates for attached objects
+    }
+  } catch(e){}
+}
+
+
+
+
+
+function showEditor(){
+  if (!wbEditor) return;
+  wbEditor.style.display = 'block';
+  wbEditor.setAttribute('aria-hidden','false');
+  // place at bottom-left unless user has dragged it
+  placeEditorIfNotMoved();
+}
+
+// ---- Editor render helpers: force which UI is visible ----
+function renderObjectEditorUIFor(rec){
+  if (wbEditorLine)  wbEditorLine.style.display  = 'none';
+  if (wbEditorCurve) wbEditorCurve.style.display = 'none';
+  if (wbEditorOrbit) wbEditorOrbit.style.display = 'none';
+  if (wbObjModeRow) wbObjModeRow.style.display = ''; 
+
+  // Hide both path sections in object editor
+  if (wbEditorLine)  wbEditorLine.style.display  = 'none';
+  if (wbEditorCurve) wbEditorCurve.style.display = 'none';
+
+  // Always hide the line-endpoint section in object editor
+  if (typeof wbEditorLine !== 'undefined' && wbEditorLine) {
+    wbEditorLine.style.display = 'none';
+  }
+  // Show/Hide TRS rows depending on path follow
+  const follow = rec?.mesh?.userData?.workbench?.follow;
+  if (follow){
+    // Following a path: Position row hidden; Rotation/Scale shown
+    wbRowPosition && (wbRowPosition.style.display = 'none');
+    wbRowRotation && (wbRowRotation.style.display = '');
+    wbRowScale    && (wbRowScale.style.display    = '');
+  } else {
+    // Object mode: show all TRS
+    wbRowPosition && (wbRowPosition.style.display = '');
+    wbRowRotation && (wbRowRotation.style.display = '');
+    wbRowScale    && (wbRowScale.style.display    = '');
+  }
+  // Re-enable inputs for object editor
+  [posX,posY,posZ,rotX,rotY,rotZ,sclX,sclY,sclZ].forEach(inp => { if (inp) inp.disabled = false; });
+}
+
+// Place the editor bottom-left with margin, but only if user hasn't moved it.
+function placeEditorIfNotMoved(margin = 24){
+  if (!wbEditor) return;
+  if (wbEditor.dataset.userMoved === '1') return; // respect user drag
+
+  // Must be visible to measure height; schedule after layout
+  requestAnimationFrame(()=>{
+    try{
+      const h = wbEditor.offsetHeight || 0;
+      wbEditor.style.left   = `${margin}px`;
+      wbEditor.style.right  = '';
+      wbEditor.style.bottom = '';
+      wbEditor.style.top    = `${Math.max(margin, (innerHeight - h - margin))}px`;
+    }catch(e){}
+  });
+}
+
+
+function renderLineEditorUIFor(rec){
+  // Show LINE; hide CURVE
+  if (wbEditorLine)  wbEditorLine.style.display  = 'block';
+  if (wbEditorCurve) wbEditorCurve.style.display = 'none';
+
+  // Only used when truly editing a PATH record
+  if (typeof wbEditorLine !== 'undefined' && wbEditorLine) {
+    wbEditorLine.style.display = 'block';
+  }
+  wbRowPosition && (wbRowPosition.style.display = 'none');
+  wbRowRotation && (wbRowRotation.style.display = 'none');
+  wbRowScale    && (wbRowScale.style.display    = 'none');
+  wbObjModeRow  && (wbObjModeRow.style.display  = 'none'); // hide Mode in Line edit
+
+  // Defensively disable generic TRS inputs while editing a path
+  [posX,posY,posZ,rotX,rotY,rotZ,sclX,sclY,sclZ].forEach(inp => { if (inp) inp.disabled = true; });
+}
+
+function renderCurveEditorUIFor(rec){
+  if (wbEditorLine)  wbEditorLine.style.display  = 'none';
+  if (wbEditorCurve) wbEditorCurve.style.display = 'block';
+  wbRowPosition && (wbRowPosition.style.display = 'none');
+  wbRowRotation && (wbRowRotation.style.display = 'none');
+  wbRowScale    && (wbRowScale.style.display    = 'none');
+  wbObjModeRow  && (wbObjModeRow.style.display  = 'none'); // hide Mode in Curve edit
+
+  [posX,posY,posZ,rotX,rotY,rotZ,sclX,sclY,sclZ].forEach(inp => { if (inp) inp.disabled = true; });
+}
+
+function renderOrbitEditorUIFor(rec){
+  if (wbEditorLine)  wbEditorLine.style.display  = 'none';
+  if (wbEditorCurve) wbEditorCurve.style.display = 'none';
+  if (wbEditorOrbit) wbEditorOrbit.style.display = 'block';
+
+  // Orbit behaves like an object: keep TRS visible & enabled
+  wbRowPosition && (wbRowPosition.style.display = '');
+  wbRowRotation && (wbRowRotation.style.display = '');
+  wbRowScale    && (wbRowScale.style.display    = '');
+  wbObjModeRow  && (wbObjModeRow.style.display  = 'none'); // hide Mode in Orbit edit
+
+  [posX,posY,posZ,rotX,rotY,rotZ,sclX,sclY,sclZ].forEach(inp => { if (inp) inp.disabled = false; });
+}
+
+
+
+// ===== [WB] EDITOR UI — open/compose editor for selected item =====
+function openWBEditor(rec){
+  // SSOT: start from a clean slate
+  if (typeof wbEditorLine  !== 'undefined' && wbEditorLine)  wbEditorLine.style.display  = 'none';
+  if (typeof wbEditorCurve !== 'undefined' && wbEditorCurve) wbEditorCurve.style.display = 'none';
+  if (typeof wbEditorOrbit !== 'undefined' && wbEditorOrbit) wbEditorOrbit.style.display = 'none';
+
+  wbEditing = rec;
+  const obj = rec.mesh;
+  wbEditorTitle.textContent = `Edit: ${rec.name} (${rec.id})`;
+
+  // ===== LINE =====
+  if (rec.type === 'line' && obj?.userData?.workbench?.params) {
+    renderLineEditorUIFor?.(rec); // hides TRS, shows line section, disables inputs
+    const { start, end } = obj.userData.workbench.params;
+    lSX.value = start.x.toFixed(3); lSY.value = start.y.toFixed(3); lSZ.value = start.z.toFixed(3);
+    lEX.value = end.x.toFixed(3);   lEY.value = end.y.toFixed(3);   lEZ.value = end.z.toFixed(3);
+
+    wbEditor.style.display = 'block';
+    placeEditorIfNotMoved();
+    wbEditor.setAttribute('aria-hidden','false');
+    return; // <- IMPORTANT: do not fall through to object layout
+  }
+
+  // ===== CURVE =====
+  if (rec.type === 'curve' && obj?.userData?.workbench?.params) {
+    renderCurveEditorUIFor?.(rec); // hides TRS, shows curve section, disables inputs
+    const { start, control, end } = obj.userData.workbench.params;
+    cSX.value = start.x.toFixed(3); cSY.value = start.y.toFixed(3); cSZ.value = start.z.toFixed(3);
+    cCX.value = control.x.toFixed(3); cCY.value = control.y.toFixed(3); cCZ.value = control.z.toFixed(3);
+    cEX.value = end.x.toFixed(3);   cEY.value = end.y.toFixed(3);   cEZ.value = end.z.toFixed(3);
+
+    wbEditor.style.display = 'block';
+    placeEditorIfNotMoved();
+    wbEditor.setAttribute('aria-hidden','false');
+    return; // <- IMPORTANT
+  }
+
+  // ===== ORBIT =====
+  if (rec.type === 'orbit' && obj?.userData?.workbench?.params) {
+    renderOrbitEditorUIFor?.(rec); // shows orbit section, keeps TRS visible/enabled
+    const p = obj.userData.workbench.params;
+    if (typeof oStartDeg !== 'undefined') oStartDeg.value = (p.startAngle ?? 0).toFixed(1);
+    if (typeof oEndDeg   !== 'undefined') oEndDeg.value   = (p.endAngle   ?? 180).toFixed(1);
+    // Orbit behaves like object: TRS visible; reflect current TRS in fields
+    _populateFrom?.(obj);
+
+    wbEditor.style.display = 'block';
+    placeEditorIfNotMoved();
+    wbEditor.setAttribute('aria-hidden','false');
+    return; // <- IMPORTANT
+  }
+
+  // ===== OBJECTS (default) =====
+  // Plain objects or any non-path record
+  renderObjectEditorUIFor?.(rec); // hides all path sections; decides Position visibility based on follow
+
+  // Populate the path dropdown for objects
+  if (typeof wbObjPathSelect !== 'undefined' && wbObjPathSelect){
+    wbObjPathSelect.innerHTML = '<option value="">Object (no path)</option>';
+    const paths = getWBPaths?.() || [];
+    for (const p of paths){
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.type}-${p.id.split('-').pop().padStart(3,'0')}`;
+      wbObjPathSelect.appendChild(opt);
+    }
+    const follow = obj.userData?.workbench?.follow;
+    wbObjPathSelect.value = follow?.pathId || '';
+  }
+
+  // Fill TRS fields for objects (and for orbit we already did above)
+  _populateFrom?.(obj);
+
+  showEditor();
+}
+
+
+
+function closeWBEditor(){
+  wbEditor.style.display = 'none';
+  wbEditor.setAttribute('aria-hidden','true');
+  wbEditing = null;
+}
+
+wbEditorClose.addEventListener('click', closeWBEditor);
+
+// Keep focus on the *object* editor: don't let dropdown clicks bubble
+wbObjPathSelect.addEventListener('click',   (e)=> e.stopPropagation());
+wbObjPathSelect.addEventListener('mousedown',(e)=> e.stopPropagation());
+
+
+// Mode select: Object (no path) or attach to a specific path
+wbObjPathSelect.addEventListener('change', (e)=>{
+  e.stopPropagation();
+  if (!wbEditing) return;
+
+  const rec = wbEditing;
+  const obj = rec.mesh;
+  obj.userData.workbench = obj.userData.workbench || {};
+
+  const pathId = wbObjPathSelect.value;
+  console.log('[ATTACH] start', { obj: rec.id, pathId });
+
+  if (!pathId){
+    // Detach from path (Object mode)
+    delete obj.userData.workbench.follow;
+    detachFollowRig(obj);           // bake world pose back into the object
+    wbRowPosition.style.display = '';
+    _populateFrom(obj);
+    renderObjectEditorUIFor(rec);
+    wbEditorTitle.textContent = `Edit: ${rec.name} (${rec.id})`;
+    console.log('[ATTACH] detached');
+    return;
+  }
+
+  // Attach to selected path (Path mode)
+  const pathRec =
+    (typeof getWBPaths === 'function' && getWBPaths().find(p => p.id === pathId)) ||
+    ((wbPrims || []).find(r => r.id === pathId));
+
+  if (!pathRec) {
+    console.warn('[ATTACH] path not found', { pathId });
+    return;
+  }
+  console.log('[ATTACH] pathRec', { id: pathRec.id, type: pathRec.type, name: pathRec.name });
+
+  // Follow config (t=0 at start)
+  obj.userData.workbench.follow = {
+    pathId, t: 0, upMode: 'world', align: 'perp', loop: false, reverse: false,
+    offset: {
+      position: new THREE.Vector3(0,0,0),
+      rotation: new THREE.Euler(0,0,0),
+      scale:    obj.scale.clone()
+    }
+  };
+
+  // Create (or reuse) a Follow Rig
+  const rig = ensureFollowRig(obj);
+  const pair   = (typeof getFollowRigAndChild === 'function') ? getFollowRigAndChild(obj) : null;
+  const target = pair?.rig || rig || obj;  // pose this (rig)
+  const child  = pair?.child || obj;       // zero this
+
+  // Zero child pos/rot so there’s no double-transform
+  child.position.set(0,0,0);
+  child.rotation.set(0,0,0);
+  child.updateMatrixWorld(true);
+
+  // Hide position row in Path mode
+  wbRowPosition.style.display = 'none';
+
+  // --- Fresh world transform for the path
+  pathRec.mesh.updateMatrixWorld(true);
+
+  // --- Orientation from SSOT frame at t=0 (works for line/curve/orbit)
+  const frame = getPathFrame(pathRec, 0);
+  console.log('[ATTACH] frame@t0', { pos: frame.pos, quat: frame.quat });
+
+  // --- Position: use the GREEN start cap world position if available
+  let posW = null;
+  const capStart = pathRec.mesh.getObjectByName('WB_ORBIT_START');
+  if (capStart) {
+    posW = new THREE.Vector3();
+    capStart.getWorldPosition(posW);
+    console.log('[ATTACH] capWorld', { capWorld: posW });
+  }
+  if (!posW) posW = frame.pos.clone(); // fallback
+
+  // --- Pose the rig using WORLD -> PARENT-LOCAL conversion (crucial)
+  const parent = target.parent || (typeof scene !== 'undefined' ? scene : null);
+  parent?.updateMatrixWorld?.(true);
+
+  const mWorld  = new THREE.Matrix4().compose(
+    posW.clone(),
+    frame.quat.clone(),
+    new THREE.Vector3(1,1,1)
+  );
+  const invParent = new THREE.Matrix4().copy(parent?.matrixWorld || new THREE.Matrix4()).invert();
+  mWorld.premultiply(invParent);
+
+  const tmpS = new THREE.Vector3();
+  mWorld.decompose(target.position, target.quaternion, tmpS);
+  // keep rig scale neutral
+  target.scale.set(1,1,1);
+  target.updateMatrixWorld(true);
+
+  // Temporary visual dot at the snap point (auto-removed)
+  try {
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(1.5, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffff00 })
+    );
+    dot.position.copy(posW);
+    (scene || wbGroup || pathRec.mesh.parent).add(dot);
+    setTimeout(()=>{ dot.parent?.remove(dot); }, 1200);
+  } catch(e){}
+
+  // Reflect child local rotation/scale in fields
+  rotX.value = THREE.MathUtils.radToDeg(child.rotation.x).toFixed(1);
+  rotY.value = THREE.MathUtils.radToDeg(child.rotation.y).toFixed(1);
+  rotZ.value = THREE.MathUtils.radToDeg(child.rotation.z).toFixed(1);
+  sclX.value = child.scale.x.toFixed(3);
+  sclY.value = child.scale.y.toFixed(3);
+  sclZ.value = child.scale.z.toFixed(3);
+
+  renderObjectEditorUIFor(rec);
+  wbEditorTitle.textContent = `Edit: ${rec.name} (${rec.id})`;
+  console.log('[ATTACH] done');
+});
+
+
+
+
+
+if (wbEditorReset) wbEditorReset.addEventListener('click', ()=>{
+  if(!wbEditing) return;
+  const rec = wbEditing;
+    if (rec.type === 'curve' && obj?.userData?.workbench?.params){
+    const lift = 0.001;
+    const r  = (SceneAPI?.info?.radius ?? (typeof getDomeRadiusFallback==='function' ? getDomeRadiusFallback(5) : 5));
+    const L  = r;
+
+    const p0 = new THREE.Vector3(-L/2, lift, 0);
+    const pc = new THREE.Vector3(   0, lift + 0.35*L, 0);
+    const p2 = new THREE.Vector3( L/2, lift, 0);
+
+
+    obj.userData.workbench.params.start.copy(p0);
+    obj.userData.workbench.params.control.copy(pc);
+    obj.userData.workbench.params.end.copy(p2);
+
+    cSX.value = p0.x.toFixed(3); cSY.value = p0.y.toFixed(3); cSZ.value = p0.z.toFixed(3);
+    cCX.value = pc.x.toFixed(3); cCY.value = pc.y.toFixed(3); cCZ.value = pc.z.toFixed(3);
+    cEX.value = p2.x.toFixed(3); cEY.value = p2.y.toFixed(3); cEZ.value = p2.z.toFixed(3);
+
+    rebuildWBCurve(obj);
+    return;
+  }
+  const obj = rec.mesh;
+  if (rec.type === 'orbit' && obj?.userData?.workbench?.params){
+    const p = obj.userData.workbench.params;
+    p.startAngle = 0;
+    p.endAngle   = 180;
+
+    oStartDeg.value = p.startAngle.toFixed(1);
+    oEndDeg.value   = p.endAngle.toFixed(1);
+
+    rebuildWBOrbit(obj);
+    return;
+  }
+  if (rec.type === 'line' && obj?.userData?.workbench?.params){
+    // Recenter to a default X segment ≈ half the dome width
+    const lift = 0.001;
+    const r  = (SceneAPI?.info?.radius ?? (typeof getDomeRadiusFallback==='function' ? getDomeRadiusFallback(5) : 5));
+    const L  = r;
+
+    const p0 = new THREE.Vector3(-L/2, lift, 0);
+    const p1 = new THREE.Vector3( L/2, lift, 0);
+
+
+    obj.userData.workbench.params.start.copy(p0);
+    obj.userData.workbench.params.end.copy(p1);
+
+    lSX.value = p0.x.toFixed(3); lSY.value = p0.y.toFixed(3); lSZ.value = p0.z.toFixed(3);
+    lEX.value = p1.x.toFixed(3); lEY.value = p1.y.toFixed(3); lEZ.value = p1.z.toFixed(3);
+
+    rebuildWBLine(obj);
+  } else {
+    obj.position.set(0,0,0);
+    obj.rotation.set(0,0,0);
+    obj.scale.set(1,1,1);
+    _populateFrom(obj);
+  }
+// Fallback: generic objects (not line/curve/orbit) reset to SSOT
+try {
+  const rec = wbEditing;
+  if (!rec) return;
+  const obj = rec.mesh;
+  if (obj && obj.isMesh && !['line','curve','orbit'].includes(rec.type)) {
+    obj.position.set(0,0,0);
+    obj.rotation.set(0,0,0);
+    obj.scale.setScalar(WB_SPAWN_SCALE); // honor SSOT
+    _populateFrom(obj);
+  }
+} catch(e){}
+});
+
+if (wbBenchExport) wbBenchExport.addEventListener('click', ()=>{
+  try {
+    const bench = buildBenchJSON();
+    downloadJSON(bench, `${(bench?.name || 'workbench')}.bench.json`);
+    console.log('[BENCH] exported', bench);
+  } catch (e){
+    console.error('[BENCH] export failed', e);
+    alert('Export failed. See console for details.');
+  }
+});
+
+if (wbBenchImport) wbBenchImport.addEventListener('click', async ()=>{
+  try {
+    const file = await pickJSONFile();
+    if (!file) return;
+    const text = await file.text();
+    const bench = JSON.parse(text);
+    console.log('[BENCH] importing …', bench);
+    await loadBenchJSON(bench);
+    console.log('[BENCH] import done.');
+  } catch (e){
+    console.error('[BENCH] import failed', e);
+    alert('Import failed. See console for details.');
+  }
+});
+
+
+/* Live update as you type (optional but nice) */
+[posX,posY,posZ,rotX,rotY,rotZ,sclX,sclY,sclZ].forEach(inp=>{
+  inp.addEventListener('input', ()=>{ if(!wbEditing) return; _applyTo(wbEditing.mesh); });
+});
+
+function _applyLineFields(){
+  if (!wbEditing) return;
+  const group = wbEditing.mesh;
+  const params = group?.userData?.workbench?.params;
+  if (!params) return;
+
+  params.start.set(Number(lSX.value||0), Number(lSY.value||0), Number(lSZ.value||0));
+  params.end.set(  Number(lEX.value||0), Number(lEY.value||0), Number(lEZ.value||0));
+  rebuildWBLine(group);
+}
+
+function _applyCurveFields(){
+  if (!wbEditing) return;
+  const group = wbEditing.mesh;
+  const params = group?.userData?.workbench?.params;
+  if (!params) return;
+
+  params.start.set(  Number(cSX.value||0), Number(cSY.value||0), Number(cSZ.value||0));
+  params.control.set(Number(cCX.value||0), Number(cCY.value||0), Number(cCZ.value||0));
+  params.end.set(    Number(cEX.value||0), Number(cEY.value||0), Number(cEZ.value||0));
+
+  rebuildWBCurve(group);
+}
+[cSX,cSY,cSZ,cCX,cCY,cCZ,cEX,cEY,cEZ].forEach(inp => inp?.addEventListener('input', _applyCurveFields));
+
+
+// As-you-type for line endpoints
+[lSX,lSY,lSZ,lEX,lEY,lEZ].forEach(inp => inp.addEventListener('input', _applyLineFields));
+
+// Keep your generic inputs active for non-line only
+[posX,posY,posZ,rotX,rotY,rotZ,sclX,sclY,sclZ].forEach(inp=>{
+  inp.addEventListener('input', ()=>{ if(!wbEditing || wbEditing.type==='line') return; _applyTo(wbEditing.mesh); });
+});
+
+function _applyOrbitFields(){
+  if (!wbEditing) return;
+  const group = wbEditing.mesh;
+  const p = group?.userData?.workbench?.params;
+  if (!p) return;
+
+  const clampDeg = (d)=> Math.max(0, Math.min(360, Number(d||0)));
+
+  p.startAngle = clampDeg(oStartDeg.value);
+  p.endAngle   = clampDeg(oEndDeg.value);
+
+  rebuildWBOrbit(group);
+}
+[oStartDeg, oEndDeg].forEach(inp => inp?.addEventListener('input', _applyOrbitFields));
+
+//////////////////////////////////////////
+// ===== Scrubbable number inputs for Workbench editor =====
+(function(){
+  // scrubb speed
+  const PX_PER_STEP_DEFAULT = .25; // pixels you drag for 1 step
+  const CLASS_SCRUBBING = 'wb-scrubbing';
+
+  function clamp(v, min, max){
+    if (min != null && !Number.isNaN(min)) v = Math.max(v, min);
+    if (max != null && !Number.isNaN(max)) v = Math.min(v, max);
+    return v;
+  }
+
+  function decimalsFromStep(step){
+    const s = String(step);
+    if (s.indexOf('.') >= 0) return s.length - s.indexOf('.') - 1;
+    return 0;
+  }
+
+  function enableScrub(input, opts = {}){
+    if (!input || input._wbScrubEnabled) return;
+    input._wbScrubEnabled = true;
+
+    let startX, startVal, moved;
+    let pxPerStep;
+
+    function onPointerDown(e){
+      if (e.button !== 0) return; // left click only
+      // If user is selecting text—defer to double click behavior
+      moved = 0;
+      startX = e.clientX;
+      startVal = Number(input.value || 0);
+      pxPerStep = opts.pxPerStep || PX_PER_STEP_DEFAULT;
+
+      input.setPointerCapture?.(e.pointerId);
+      document.body.classList.add(CLASS_SCRUBBING);
+      input.classList.add(CLASS_SCRUBBING);
+      // Prevent selecting text while scrubbing
+      e.preventDefault();
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp, { once:true });
+    }
+
+    function onPointerMove(e){
+      const dx = e.clientX - startX;
+      moved = Math.max(moved, Math.abs(dx));
+
+      const baseStep = Number(input.step || 1) || 1;
+      const min = input.min === '' ? null : Number(input.min);
+      const max = input.max === '' ? null : Number(input.max);
+      const accel = (e.shiftKey ? 10 : 1) * (e.altKey ? 0.1 : 1);
+      const steps = dx / pxPerStep;
+      let next = startVal + steps * baseStep * accel;
+
+      // snap to step grid relative to 0 (feels natural for dragging)
+      const fixed = decimalsFromStep(baseStep);
+      next = clamp(next, min, max);
+      input.value = next.toFixed(fixed);
+
+      // fire your existing live-update listener
+      input.dispatchEvent(new Event('input', { bubbles:true }));
+    }
+
+    function onPointerUp(e){
+      input.releasePointerCapture?.(e.pointerId);
+      document.body.classList.remove(CLASS_SCRUBBING);
+      input.classList.remove(CLASS_SCRUBBING);
+
+      window.removeEventListener('pointermove', onPointerMove);
+
+      // If user barely moved, treat as a normal click (place caret)
+      if (moved < 3){
+        input.focus();
+        // place caret at end for convenience
+        const len = input.value.length;
+        input.setSelectionRange?.(len, len);
+      }
+    }
+
+    input.addEventListener('pointerdown', onPointerDown);
+  }
+
+  // Enable for all number inputs inside the WB editor
+  function enableEditorScrub(){
+    const root = document.getElementById('wbEditor');
+    if (!root) return;
+    root.querySelectorAll('input[type="number"]').forEach(inp => enableScrub(inp));
+  }
+
+  // Run once now; if your editor DOM is created later, call enableEditorScrub() after you build it.
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', enableEditorScrub, { once:true });
+  } else {
+    enableEditorScrub();
+  }
+
+  // Expose to call after dynamic re-renders (optional)
+  window.enableEditorScrub = enableEditorScrub;
+})();
+
+
+
+/* Draggable header */
+(function(){
+  const drag = document.getElementById('wbEditorDrag');
+  let dx=0, dy=0, active=false;
+  const onDown = (e)=>{ active=true; const r=wbEditor.getBoundingClientRect(); dx=e.clientX - r.left; dy=e.clientY - r.top; e.preventDefault(); };
+  const onMove = (e)=>{ if(!active) return; wbEditor.style.left = (e.clientX - dx) + 'px'; wbEditor.style.top = (e.clientY - dy) + 'px'; };
+  const onUp = ()=>{ active=false; };
+  drag.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+})();
+
+
+
+// END HELPERS
+// ---- Workbench QoL defaults (SSOT) ----
+const WB_SPAWN_SCALE = 3;  // all objects spawn x3 size
+
+
+function createPrimitive(type){
+
+  // LINE
+  if (type === 'line') {
+  const group = new THREE.Group();
+  group.name = 'WB_LINE';
+
+  // length: half the dome's width (== dome radius), centered on origin
+  const lift = 0.001;
+
+  // Use the baked/cached radius first (most accurate), fallback if missing
+  const r = (SceneAPI?.info?.radius ?? getDomeRadiusFallback(5));
+
+  // If we're under domeRoot (Workbench), compensate for its uniform scale (0.7)
+  const L = r;
+
+  const p0 = new THREE.Vector3(-L, lift, 0);
+  const p1 = new THREE.Vector3( L, lift, 0);
+
+
+  // ---- fat line if available; thin line fallback otherwise ----
+  let pathObj = null;
+  if (window.Line2 && window.LineMaterial && window.LineGeometry) {
+    const pts = [p0.x, p0.y, p0.z,  p1.x, p1.y, p1.z];
+    const lineGeom = new window.LineGeometry();
+    lineGeom.setPositions(pts);
+
+    // LINE THICKNESS
+    const PATH_WIDTH_PX = 2; // adjust thickness here
+    const lineMat = new window.LineMaterial({ color: 0xffffff, linewidth: PATH_WIDTH_PX });
+
+    // set resolution once now; kept in sync by hook below
+    const cvs = renderer && renderer.domElement;
+    if (cvs && lineMat.resolution?.set) {
+      const w = cvs.clientWidth || cvs.width || innerWidth;
+      const h = cvs.clientHeight || cvs.height || innerHeight;
+      lineMat.resolution.set(w, h);
+    }
+
+    pathObj = new window.Line2(lineGeom, lineMat);
+  } else {
+    // fallback: standard thin line
+    const lineGeom = new THREE.BufferGeometry().setFromPoints([p0, p1]);
+    const lineMat  = new THREE.LineBasicMaterial({ color: 0xffffff });
+    pathObj = new THREE.Line(lineGeom, lineMat);
+  }
+  group.add(pathObj);
+
+  // End-caps (5× larger than earlier)
+  const capSize = 1.0;
+  const capGeom = new THREE.BoxGeometry(capSize, capSize, capSize);
+  const start   = new THREE.Mesh(capGeom, new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
+  const end     = new THREE.Mesh(capGeom, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+  start.position.copy(p0);
+  end.position.copy(p1);
+  group.add(start, end);
+
+  // ----- names so the editor can find parts -----
+  pathObj.name = 'WB_LINE_PATH';
+  start.name   = 'WB_LINE_START';
+  end.name     = 'WB_LINE_END';
+
+  // bookkeeping (with endpoints)
+  const id = nextWBId('line');
+  group.userData.workbench = {
+    id, type: 'line',
+    params: { start: p0.clone(), end: p1.clone() }
+  };
+  
+  ensureWBId(group, 'line');
+
+  group.userData.colorHex  = '#ffffff';
+
+  wbGroup.add(group);
+  wbPrims.push({ id, name: 'line', type: 'line', mesh: group });
+  refreshWBList();
+  return group;
+
+}
+
+// CURVE
+if (type === 'curve') {
+  const group = new THREE.Group();
+  group.name = 'WB_CURVE';
+
+  // World-scaled length like the line: default to ~half dome width (radius)
+  const lift = 0.001;
+  const r  = (SceneAPI?.info?.radius ?? (typeof getDomeRadiusFallback==='function' ? getDomeRadiusFallback(5) : 5));
+  const L  = r;                       // world = local
+  const p0 = new THREE.Vector3(-L, lift, 0);
+  const p2 = new THREE.Vector3( L, lift, 0);
+  const p1 = new THREE.Vector3(  0, lift + 0.35*L, 0);
+
+
+  // Build a Quadratic Bezier and sample points for display
+  const curve = new THREE.QuadraticBezierCurve3(p0, p1, p2);
+  const SEGMENTS = 64;
+  const points = curve.getPoints(SEGMENTS);
+
+  // ---- Render the path: Line2 if available; fallback to thin Line ----
+  let pathObj = null;
+  if (window.Line2 && window.LineMaterial && window.LineGeometry) {
+    // flatten [x,y,z,...]
+    const flat = [];
+    for (let i=0; i<points.length; i++){ const v=points[i]; flat.push(v.x,v.y,v.z); }
+    const lineGeom = new window.LineGeometry();
+    lineGeom.setPositions(flat);
+
+    const PATH_WIDTH_PX = 2; // slightly thinner than straight line by default
+    const lineMat = new window.LineMaterial({ color: 0xffffff, linewidth: PATH_WIDTH_PX });
+
+    // set resolution once now; resize hook you added for line will keep it fresh
+    const cvs = renderer && renderer.domElement;
+    if (cvs && lineMat.resolution?.set){
+      const w = cvs.clientWidth || cvs.width || innerWidth;
+      const h = cvs.clientHeight || cvs.height || innerHeight;
+      lineMat.resolution.set(w, h);
+    }
+
+    pathObj = new window.Line2(lineGeom, lineMat);
+  } else {
+    const geom = new THREE.BufferGeometry().setFromPoints(points);
+    const mat  = new THREE.LineBasicMaterial({ color: 0xffffff });
+    pathObj    = new THREE.Line(geom, mat);
+  }
+  group.add(pathObj);
+
+  // ---- Handles: start/end cubes + center control (yellow) ----
+  const capSize = 1.0; // match your line’s caps scale
+  const capGeom = new THREE.BoxGeometry(capSize, capSize, capSize);
+
+  const start = new THREE.Mesh(capGeom, new THREE.MeshBasicMaterial({ color: 0x00ff00 })); // green
+  start.position.copy(p0);
+  group.add(start);
+
+  const end = new THREE.Mesh(capGeom, new THREE.MeshBasicMaterial({ color: 0xff0000 }));   // red
+  end.position.copy(p2);
+  group.add(end);
+
+  const ctrl = new THREE.Mesh(capGeom, new THREE.MeshBasicMaterial({ color: 0xffff00 }));  // yellow control
+  ctrl.position.copy(p1);
+  group.add(ctrl);
+
+  // Canonical names for editor lookups
+  pathObj.name = 'WB_CURVE_PATH';
+  start.name   = 'WB_CURVE_START';
+  ctrl.name    = 'WB_CURVE_CTRL';
+  end.name     = 'WB_CURVE_END';
+
+  // IDs + bookkeeping (same scheme as others)
+  const id = nextWBId('curve');
+  group.userData.workbench = {
+    id, type: 'curve',
+    params: { start: p0.clone(), control: p1.clone(), end: p2.clone() }
+  };
+
+  ensureWBId(group, 'curve');
+
+  group.userData.colorHex = '#ffffff'; // swatch fallback
+  // one-time resize hook to keep fat-line width crisp (no-op for fallback)
+(function hookFatLineResizeOnce(){
+  if (window.__wbFatLineHooked) return;
+  window.__wbFatLineHooked = true;
+  window.addEventListener('resize', ()=>{
+    try {
+      const cvs = renderer?.domElement;
+      if (!cvs) return;
+      const w = cvs.clientWidth || cvs.width || innerWidth;
+      const h = cvs.clientHeight || cvs.height || innerHeight;
+      wbGroup?.traverse?.(o => {
+        const m = o.material;
+        if (m?.resolution?.set) m.resolution.set(w, h);
+      });
+    } catch(e){}
+  }, { passive:true });
+})();
+
+
+  wbGroup.add(group);
+  wbPrims.push({ id, name: 'curve', type: 'curve', mesh: group });
+  refreshWBList();
+  return group;
+  }
+
+  
+  // ORBIT
+if (type === 'orbit') {
+  const id = nextWBId('orbit');
+
+  const group = new THREE.Group();
+  group.name = id;
+
+  // --- sizing + defaults ---
+    const rDome  = (SceneAPI?.info?.radius ?? (typeof getDomeRadiusFallback === 'function' ? getDomeRadiusFallback(5) : 5));
+  // world = local; no compensation
+  const rWorld = rDome;
+  const R      = rWorld * 0.8;
+  const lift  = 0.001;                                 // float off ground to avoid z-fighting
+  const nrm   = new THREE.Vector3(0, 1, 0);            // up-facing orbit plane normal
+
+  // --- ring path (Line2 if available; fallback to thin Line) ---
+  let pathObj;
+  (function buildRing(){
+    const SEG = 128;
+
+    if (window.Line2 && window.LineGeometry && window.LineMaterial) {
+      const positions = new Float32Array((SEG + 1) * 3);
+      for (let i = 0; i <= SEG; i++) {
+        const a = (i / SEG) * Math.PI * 2;
+        positions[i * 3 + 0] = Math.cos(a) * R;
+        positions[i * 3 + 1] = lift;
+        positions[i * 3 + 2] = Math.sin(a) * R;
+      }
+      const g = new LineGeometry();
+      g.setPositions(positions);
+
+      const m = new LineMaterial({
+        color: 0xffffff,
+        linewidth: 2,          // worldUnits:true by default in LineMaterial
+        dashed: false
+      });
+      const cvs = renderer?.domElement;
+      const w = cvs?.clientWidth || cvs?.width || innerWidth;
+      const h = cvs?.clientHeight || cvs?.height || innerHeight;
+      m.resolution?.set(w, h);
+
+      pathObj = new Line2(g, m);
+    } else {
+      const pts = [];
+      for (let i = 0; i <= SEG; i++) {
+        const a = (i / SEG) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a) * R, lift, Math.sin(a) * R));
+      }
+      const g = new THREE.BufferGeometry().setFromPoints(pts);
+      const m = new THREE.LineBasicMaterial({ color: 0xffffff });
+      pathObj = new THREE.Line(g, m);
+    }
+  })();
+  group.add(pathObj);
+
+  // --- handles: start (green), end (red) ON the ring; center (yellow) AT center ---
+  const capSize = Math.max(0.02 * rWorld, 0.5);
+  const capGeom = new THREE.BoxGeometry(capSize, capSize, capSize);
+
+  // start @ +X (angle 0°)
+  const start = new THREE.Mesh(capGeom, new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
+  start.position.set( R, lift, 0);
+  group.add(start);
+
+  // end @ -X (angle 180°)
+  const end   = new THREE.Mesh(capGeom, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+  end.position.set(-R, lift, 0);
+  group.add(end);
+
+  // center marker
+  const center = new THREE.Mesh(capGeom, new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+  center.position.set(0, lift, 0);
+  group.add(center);
+
+  // canonical names for editor lookups
+  pathObj.name = 'WB_ORBIT_PATH';
+  start.name   = 'WB_ORBIT_START';
+  end.name     = 'WB_ORBIT_END';
+  center.name  = 'WB_ORBIT_CENTER';
+
+  // --- bookkeeping ---
+  group.userData.workbench = {
+    id, type: 'orbit',
+    params: {
+      center: new THREE.Vector3(0, lift, 0),  // center in local space
+      normal: nrm.clone(),                    // plane normal (unit)
+      radius: R,                              // ring radius
+      startAngle: 0,                          // degrees
+      endAngle: 180                           // degrees
+    }
+  };
+  ensureWBId(group, 'orbit');
+  group.userData.colorHex = '#ffffff';
+
+  // add to stage & list
+  wbGroup.add(group);
+  wbPrims.push({ id, name: 'orbit', type: 'orbit', mesh: group });
+  refreshWBList();
+  return group;
+}
+
+
+
+
+  if (!wbGroup) return;
+
+  const geom = makePrimGeometry(type);
+  const mat  = new THREE.MeshBasicMaterial({ color: brightRandomColor(), wireframe: true });
+  const mesh = new THREE.Mesh(geom, mat);
+
+  mesh.position.set(0,0,0);
+  mesh.rotation.set(0,0,0);
+  mesh.scale.setScalar(WB_SPAWN_SCALE);
+
+  const id = nextWBId(type);
+  mesh.userData.workbench = { id, type };
+
+  wbGroup.add(mesh);
+
+  // --- ID & record (SSOT) ---
+  const name = type;
+  const rec  = { id: '', name, type, mesh };
+  ensureWBId(mesh, type, rec);
+
+  wbGroup.add(mesh);
+  wbPrims.push(rec);
+  refreshWBList();
+  return mesh;
+
+}
+
+
+// --- add once (near your other helpers) ---
+function planeBasisFromNormal(nrm){
+  const n = nrm.clone().normalize();
+  // prefer +X; if nearly parallel, fall back to +Y
+  const refX = new THREE.Vector3(1,0,0);
+  const refY = new THREE.Vector3(0,1,0);
+  const proj = refX.clone().sub(n.clone().multiplyScalar(refX.dot(n)));
+  const useY  = proj.lengthSq() < 1e-8;
+  const u = (useY ? refY.clone().sub(n.clone().multiplyScalar(refY.dot(n))) : proj).normalize();
+  const v = new THREE.Vector3().crossVectors(n, u).normalize();
+  return { u, v, n };
+}
+
+// ---- [ANCHOR:orbit-math] canonical orbit helpers ---------------------------
+function deg(a){ return THREE.MathUtils.degToRad(Number(a||0)); }
+
+/** Build an orthonormal basis (u,v,n) for an orbit plane from its normal. */
+function orbitPlaneBasis(normal){
+  return planeBasisFromNormal(normal); // {u,v,n}
+}
+
+/** Position + unit tangent in LOCAL space for an orbit at param t∈[0,1]. */
+function orbitLocalPosTan(P, t){
+  const ctr = P.center.clone();
+  const nrm = P.normal.clone().normalize();
+  const R   = Number(P.radius || 0);
+
+  const a0 = deg(P.startAngle);
+  const a1 = deg(P.endAngle);
+  const tt = THREE.MathUtils.clamp(t, 0, 1);
+  const ang = a0 + (a1 - a0) * tt;
+
+  const { u, v } = orbitPlaneBasis(nrm);
+
+  // position on ring
+  const posL = ctr.clone()
+    .addScaledVector(u, Math.cos(ang) * R)
+    .addScaledVector(v, Math.sin(ang) * R);
+
+  // unit tangent in orbit plane (d/dθ)
+  const tanL = u.clone().multiplyScalar(-Math.sin(ang))
+    .addScaledVector(v,  Math.cos(ang))
+    .normalize();
+
+  return { posL, tanL, nrmL: nrm };
+}
+
+
+// ===== [WB] LIST — render items, color swatch, Edit/Delete, buttons =====
+function refreshWBList(){
+  const list = document.getElementById('wbList');
+  if (!list) return;
+
+  // Clear existing rows
+  list.innerHTML = '';
+
+  // No items? (optional empty state)
+  if (!Array.isArray(wbPrims) || wbPrims.length === 0){
+    const empty = document.createElement('div');
+    empty.style.opacity = '0.6';
+    empty.style.font = '12px ui-monospace,Menlo,monospace';
+    empty.textContent = 'No workbench items yet.';
+    list.appendChild(empty);
+    return;
+  }
+
+  // Rebuild rows
+  for (const rec of wbPrims){
+    // Row container
+    const row = document.createElement('div');
+    row.className = 'wb-row';
+    // keep rows compact and aligned even if CSS isn’t present
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = 'auto 1fr auto auto';
+    row.style.alignItems = 'center';
+    row.style.gap = '8px';
+    row.style.padding = '4px 0';
+
+    // Color swatch
+    const sw = document.createElement('span');
+    sw.style.display = 'inline-block';
+    sw.style.width = '12px';
+    sw.style.height = '12px';
+    sw.style.borderRadius = '3px';
+    sw.style.border = '1px solid rgba(255,255,255,0.18)';
+    sw.style.boxShadow = 'inset 0 0 0 1px rgba(0,0,0,0.35)';
+    // prefer mesh.userData.colorHex, then rec.colorHex, then a neutral
+    const colorHex =
+      (rec.mesh?.userData?.colorHex) || (rec.colorHex) || '#a0a0a0';
+    sw.style.background = colorHex;
+
+    // Label (name-ID only, per your spec)
+    const label = document.createElement('span');
+    label.className = 'wb-name';
+    label.style.font = '12px ui-monospace,Menlo,monospace';
+    label.style.overflow = 'hidden';
+    label.style.textOverflow = 'ellipsis';
+    label.style.whiteSpace = 'nowrap';
+    // Use rec.id (e.g., "sphere-001", "line-002", etc.)
+    label.textContent = rec.id || `${rec.name || rec.type || 'item'}`;
+
+    // Spacer to keep buttons aligned right in case of CSS differences
+    const spacer = document.createElement('div');
+
+    // Edit button
+    const edit = document.createElement('button');
+    edit.textContent = 'Edit';
+    edit.className = 'btn';
+    edit.style.padding = '4px 8px';
+    edit.style.borderRadius = '6px';
+    edit.addEventListener('click', ()=> openWBEditor(rec));
+
+    // Delete button
+    const del = document.createElement('button');
+    del.textContent = 'Delete';
+    del.className = 'danger';
+    del.style.padding = '4px 8px';
+    del.style.borderRadius = '6px';
+    del.addEventListener('click', ()=> handleWBDelete(rec));
+
+    // Assemble row
+    row.appendChild(sw);
+    row.appendChild(label);
+    row.appendChild(edit);
+    row.appendChild(del);
+
+    // Append to list
+    list.appendChild(row);
+  }
+}
+
+
+
+/** Reflect camera across controls.target (switch +axis <-> -axis). */
+function flipCameraAcrossTarget(){
+  if (!controls || !camera) return;
+  const t = controls.target.clone();
+  const v = camera.position.clone().sub(t); // cam vector from target
+  camera.position.copy(t.clone().sub(v));   // reflect to opposite side
+  camera.lookAt(t);
+  if (typeof controls.update === 'function') controls.update();
+}
+
+/** Unified click: normal behavior outside WB; toggle side inside WB. */
+function toggleAxisView(axis){
+  const mode = modeSel?.value;
+  if (mode !== 'workbench'){
+    // Keep Dev/Preview behavior identical
+    if (typeof setAxisView === 'function') setAxisView(axis);
+    return;
+  }
+  if (wbLastAxis === axis){
+    wbFlip[axis] *= -1;      // same axis -> flip to the other side
+  } else {
+    wbLastAxis = axis;       // new axis -> start on +side
+    wbFlip[axis] = 1;
+  }
+  if (typeof setAxisView === 'function') setAxisView(axis); // go to +axis
+  if (wbFlip[axis] < 0) flipCameraAcrossTarget();           // then reflect if -axis
+  refreshAxisButtonLabels();
+}
+
+// ===== Axis labels (+/-) + Workbench scale helpers =====
+function refreshAxisButtonLabels(){
+  // Buttons only visible in WB, but be defensive
+  const mode = modeSel?.value;
+  if (mode !== 'workbench'){
+    if (viewX) viewX.textContent = 'X';
+    if (viewY) viewY.textContent = 'Y';
+    if (viewZ) viewZ.textContent = 'Z';
+    return;
+  }
+  // Show + or - based on current wbFlip state (defaults are +)
+  if (viewX) viewX.textContent = `X${wbFlip.x >= 0 ? '+' : '-'}`;
+  if (viewY) viewY.textContent = `Y${wbFlip.y >= 0 ? '+' : '-'}`;
+  if (viewZ) viewZ.textContent = `Z${wbFlip.z >= 0 ? '+' : '-'}`;
+}
+
+// Scale the whole dome around its true center via a pivot group
+// [PATCH: no-legacy-scale] — keep domeRoot at 1.0 in all modes
+function applyWorkbenchScale(_isWB){
+  if (domeRoot) domeRoot.scale.setScalar(1.0);
+}
+
+
+
+/* ---------- constants ---------- */
+const START_AZ = Math.PI, START_POLAR = Math.PI/2;
+const DEFAULT_FPS = 30;
+
+
+
+/* ---------- sRGB export helpers ---------- */
+const clamp01 = (x)=> x<0?0:x>1?1:x;
+function linToSrgb(c){ return (c<=0.0031308)?12.92*c:1.055*Math.pow(c,1/2.4)-0.055; }
+const encodeLinearRGBtoSRGB = (rgb)=>[linToSrgb(rgb[0]),linToSrgb(rgb[1]),linToSrgb(rgb[2])].map(clamp01);
+const quantize = (x,dec=3)=>{ const m=10**dec; return Math.round(clamp01(x)*m)/m; };
+const quantizeRGBA = (rgba)=>[quantize(rgba[0]),quantize(rgba[1]),quantize(rgba[2]),quantize(rgba[3])];
+
+/* ---------- three.js scene ---------- */
+let renderer, scene, camera, controls;
+let fullGeom=null, previewMesh=null;
+let dev_T_mesh=null, dev_D_lines=null, dev_L_lines=null;
+let centroidsGroup=null, centroidsT=null, centroidsD=null, centroidsL=null, dotTexture=null;
+let crosshair=null, axisLines=null;  // axis lines
+let domeRoot = null; // parent pivot at dome center for WB scaling
+// ===== Workbench-only gray swap helpers =====
+const GREY30 = 0x4d4d4d; // ≈ 30% gray (30/100)
+
+function _ensureOrig(mat){
+  if (!mat) return;
+  if (!('_origHex' in mat)) mat._origHex = mat.color?.getHex();
+}
+
+function _setHex(obj, hex){
+  if (!obj?.material?.color) return;
+  _ensureOrig(obj.material);
+  obj.material.color.setHex(hex);
+}
+
+function _restoreHex(obj){
+  if (!obj?.material?.color) return;
+  const mat = obj.material;
+  if ('_origHex' in mat && mat._origHex != null) mat.color.setHex(mat._origHex);
+}
+
+// Call with true in Workbench to gray them; false elsewhere to restore originals
+function applyWorkbenchGrey(isWB){
+  const targets = [
+    dev_T_mesh, dev_D_lines, dev_L_lines,
+    centroidsT, centroidsD, centroidsL
+  ];
+  if (isWB){
+    targets.forEach(t => _setHex(t, GREY30));
+  } else {
+    targets.forEach(t => _restoreHex(t));
+  }
+}
+
+
+let wireOverride=false; // used internally for Workbench “wire-like” view
+
+let domeMeta=null, panelBoxes=[];
+let lastPanelId=null;
+const _v = new THREE.Vector3();
+
+/* ---------- engine ---------- */
+const Engine = {
+  fps: DEFAULT_FPS, playing:false, t:0, duration:12, lastReal:0,
+  setDuration(d){ this.duration=Math.max(0,d); scrub.max=String(this.duration); },
+  play(){ this.playing=true; this.lastReal=performance.now()/1000; },
+  pause(){ this.playing=false; },
+  tick(){
+    const now=performance.now()/1000;
+    if(this.playing){
+      const dt=now-this.lastReal; this.t+=dt;
+      tVal.textContent=this.t.toFixed(2); scrub.value=String(Math.min(this.t,this.duration));
+      if (modeSel.value!=='dev') {
+        SequenceManager.update(this.t,dt);
+        applyPreviewColors();
+      }
+    }
+    this.lastReal=now;
+  }
+};
+
+/* ---------- SceneAPI ---------- */
+const SceneAPI = {
+  _rgbaById:new Map(), _explicitAlpha:new Set(),
+  ids:{T:[],D:[],L:[]},
+  posOf(id){ const rec=panelBoxes.find(p=>p.id===id); if(!rec) return {x:0,y:0,z:0}; const c=rec.center; return {x:c.x,y:c.y,z:c.z}; },
+  setColors(list){
+    for (const {id,color} of list){
+      let rgba = Array.isArray(color) ? (color.length===3?[...color,1]:color.slice(0,4)) : [1,1,1,1];
+      if (rgba.length>=4) this._explicitAlpha.add(id);
+      this._rgbaById.set(id, rgba);
+    }
+  },
+  resetColorsTo(base=[1,1,1,1]){
+    this._rgbaById.clear(); this._explicitAlpha.clear();
+    for (const p of domeMeta.panels) this._rgbaById.set(p.id, base.slice());
+  },
+  overlay:null, info:null, THREE,
+  bench: null,  
+};
+
+/* ---------- Sequences ---------- */
+const SequenceManager = {
+  current:null, meta:null, list:[],
+  async discover(){
+    this.list.length=0;
+    try{
+      const man = await import('./Ripps/_index.js');
+      const arr = Array.isArray(man.default) ? man.default : (man.list || []);
+      for (const e of arr) this.list.push({ id:e.id, name:e.name || e.id });
+    }catch(e){ console.warn('Could not load /Ripps/_index.js', e); }
+    populateSequences(); loadBtn.disabled=(this.list.length===0);
+  },
+  async loadById(id){
+    if(!id){ alert('Pick a ripp first.'); return; }
+    try{
+      if (this.current?.dispose) this.current.dispose(SceneAPI);
+      const mod = await import(`./Ripps/${id}.js`);
+      this.current = mod;
+      this.meta = mod.meta || { fps: DEFAULT_FPS, duration: 12, id };
+      Engine.fps = this.meta.fps || DEFAULT_FPS; fpsVal.textContent=String(Engine.fps);
+      if (this.meta.duration != null) Engine.setDuration(this.meta.duration);
+      SceneAPI.resetColorsTo([1,1,1,1]);
+      mod.init?.(SceneAPI);
+      mod.update?.(SceneAPI, 0, 0);
+      applyPreviewColors();
+      tVal.textContent='0.00'; Engine.t=0; scrub.value='0';
+    }catch(err){
+      console.error('Failed to import ripp', id, err);
+      alert(`Failed to load ripp: /Ripps/${id}.js`);
+    }
+  },
+  update(t,dt){ this.current?.update?.(SceneAPI,t,dt); }
+};
+
+function populateSequences(){
+  seqSel.innerHTML='';
+  for (const s of SequenceManager.list){
+    const o=document.createElement('option'); o.value=s.id; o.textContent=s.name; seqSel.appendChild(o);
+  }
+}
+
+/* ---------- Exporter (JSON — sRGB, 3-dec, alpha default=1) ---------- */
+function toExportRGBA(id, rgba){
+  const rgb_srgb = encodeLinearRGBtoSRGB(rgba);
+  const a = SceneAPI._explicitAlpha.has(id) ? clamp01(rgba[3]) : 1.0;
+  return [ quantize(rgb_srgb[0]), quantize(rgb_srgb[1]), quantize(rgb_srgb[2]), quantize(a) ];
+}
+async function bakeToJSON(){
+  if (modeSel.value!=='preview'){ alert('Bake JSON is only available in Preview mode.'); return; }
+  const duration = Number(prompt('Bake duration (seconds):', String(SequenceManager.meta?.duration ?? Engine.duration ?? 12)));
+  if (!isFinite(duration) || duration <= 0) { alert('Invalid duration'); return; }
+  const fps = parseInt(SequenceManager.meta?.fps || Engine.fps || DEFAULT_FPS, 10) || DEFAULT_FPS;
+
+  SequenceManager.current?.init?.(SceneAPI);
+
+  const lastFrame = Math.round(duration * fps);
+  const events = [];
+  for (let frame=0; frame<=lastFrame; frame++){
+    const t = frame / fps, dt = 1 / fps;
+    SequenceManager.current?.update?.(SceneAPI, t, dt);
+    const set = {};
+    for (const p of domeMeta.panels){
+      const rgba = (SceneAPI._rgbaById.get(p.id) || [1,1,1,1]).slice(0,4);
+      set[p.id] = { rgba: toExportRGBA(p.id, rgba), space:'srgb' };
+    }
+    events.push({ t:+t.toFixed(6), set });
+  }
+
+  const payload = { fps, events };
+  const json = JSON.stringify(payload);
+  const defaultName = `Baked_${SequenceManager.meta?.id || 'sequence'}_${fps}fps_${duration}s.json`;
+
+  try{
+    if ('showSaveFilePicker' in window){
+      const handle = await window.showSaveFilePicker({
+        suggestedName: defaultName,
+        types: [{ description:'JSON', accept:{'application/json':['.json']} }],
+      });
+      const w = await handle.createWritable();
+      await w.write(new Blob([json], {type:'application/json'}));
+      await w.close();
+      alert(`Baked → ${defaultName}`);
+      return;
+    }
+  }catch(e){ console.warn('Picker failed; fallback download.', e); }
+
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href:url, download:defaultName });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 500);
+}
+
+/* ---------- Modes ---------- */
+function setMode(m){
+  const isPreview = (m==='preview');
+  const isDev = (m==='dev');
+  const isWB = (m==='workbench');
+
+  // WB color treatment (only affects T/D/L + centroids)
+  applyWorkbenchGrey(isWB);
+  applyWorkbenchScale(isWB);
+  
+
+  // Show primitives only in Workbench
+  if (wbGroup) wbGroup.visible = isWB;
+
+  // ---------- UI / Panel visibility (unchanged) ----------
+  wbPanel.style.display = isWB ? 'block' : 'none';
+  if (wbSaveWrap) wbSaveWrap.style.display = isWB ? '' : 'none';
+  wbViews.style.display = isWB ? 'flex' : 'none';
+
+  seqWrap.classList.toggle('hidden', !isPreview);
+  faceWrap.classList.toggle('hidden', !isPreview);   // Faces menu only in Preview
+  transportWrap.classList.toggle('hidden', isDev);
+  devToggles.classList.toggle('hidden', !isDev);
+
+  bakeBtn.style.display = isPreview ? '' : 'none';
+  angHud.classList.toggle('hidden', !isDev);
+
+  // Workbench uses a wire-like view internally, no Faces UI
+  wireOverride = isWB;
+
+  // ---------- Mesh / Line visibility (unchanged) ----------
+  if (previewMesh) previewMesh.visible = (isPreview && !wireOverride);
+  if (dev_T_mesh)  dev_T_mesh.visible  = (isDev || wireOverride) && visT.checked;
+  if (dev_D_lines) dev_D_lines.visible = (isDev || wireOverride) && visD.checked;
+  if (dev_L_lines) dev_L_lines.visible = (isDev || wireOverride) && visL.checked;
+
+  // ---------- Preview-only tweak from prior task ----------
+  // Hide crosshair and long RGB axis guides ONLY in Preview
+  if (crosshair)  crosshair.visible  = !isPreview;
+  if (axisLines)  axisLines.visible  = !isPreview;
+
+  // ---------- Housekeeping (unchanged) ----------
+  syncCentroidVisibility();
+  if (!isDev) applyPreviewColors();
+
+  if (isWB) {
+    setAxisView('z');            // your default entry view
+    wbLastAxis = 'z';            // remember last axis
+    wbFlip = { x:1, y:1, z:1 };  // start on +sides
+    refreshWBList();
+  }
+
+  // Hide the entire transport cluster in Workbench
+  (function(){
+    const wrapIds = ['seqWrap','transportWrap'];
+    for (const id of wrapIds){
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.style.display = isWB ? 'none' : '';
+    }
+  })();
+
+  refreshAxisButtonLabels();
+
+}
+
+
+/* ---------- Geometry & helpers ---------- */
+function buildFullGeometry(mod){ const { domeMesh, buildGeometry } = mod; return buildGeometry(THREE, domeMesh); }
+function buildSeparated(fullGeom, panels){
+  const idx=fullGeom.getIndex().array;
+  const keep=[]; for(const p of panels){ const s=p.start|0,e=s+(p.count|0); if(p.id[0].toUpperCase()==='T') keep.push([s,e]); }
+  keep.sort((a,b)=>a[0]-b[0]); const merged=[]; for(const r of keep){ if(!merged.length||r[0]>merged.at(-1)[1]) merged.push(r); else merged.at(-1)[1]=Math.max(merged.at(-1)[1],r[1]); }
+  let kept=0; for(const [s,e] of merged) kept+=(e-s);
+  const U16=(idx instanceof Uint16Array), newIndex=U16?new Uint16Array(kept):new Uint32Array(kept);
+  { let w=0; for(const [s,e] of merged){ newIndex.set(idx.subarray(s,e),w); w+=e-s; } }
+  const gT=new THREE.BufferGeometry(); gT.setAttribute('position', fullGeom.getAttribute('position')); gT.setIndex(new THREE.BufferAttribute(newIndex,1)); gT.computeBoundingSphere();
+
+  const pos=fullGeom.getAttribute('position').array, idxO=fullGeom.getIndex().array;
+  const mk=(letter)=>{ const out=[]; for(const p of panels){ if(p.id[0].toUpperCase()!==letter) continue;
+      const s=p.start|0,e=s+(p.count|0), edge=new Map();
+      for(let i=s;i<e;i+=3){ const a=idxO[i]|0,b=idxO[i+1]|0,c=idxO[i+2]|0;
+        for(const [u,v] of [[a,b],[b,c],[c,a]]){ const x=u<v?u:v,y=u<v?v:u,key=`${x}|${y}`; const rec=edge.get(key); rec?rec.count++:edge.set(key,{a:x,b:y,count:1}); } }
+      for(const {a,b,count} of edge.values()) if(count===1){ const ia=a*3,ib=b*3; out.push(pos[ia],pos[ia+1],pos[ia+2], pos[ib],pos[ib+1],pos[ib+2]); }
+    }
+    const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out),3)); g.computeBoundingSphere(); return g; };
+  return { gT, gD:mk('D'), gL:mk('L') };
+}
+function triAreaAndCentroid(ax,ay,az,bx,by,bz,cx,cy,cz){
+  const abx=bx-ax, aby=by-ay, abz=bz-az, acx=cx-ax, acy=cy-ay, acz=cz-az;
+  const cxp=aby*acz - abz*acy, cyp=abz*acx - abx*acz, czp=abx*acy - aby*acx;
+  const area=0.5*Math.hypot(cxp,cyp,czp);
+  return { area, cx:(ax+bx+cx)/3, cy:(ay+by+cy)/3, cz:(az+bz+cz)/3 };
+}
+function computePanelCentroids(fullGeom, panels){
+  const pos=fullGeom.getAttribute('position').array, idx=fullGeom.getIndex().array, out=[];
+  for(const p of panels){
+    const s=p.start|0,e=s+(p.count|0); let sumA=0,sx=0,sy=0,sz=0;
+    for(let i=s;i<e;i+=3){
+      const ia=(idx[i]|0)*3, ib=(idx[i+1]|0)*3, ic=(idx[i+2]|0)*3;
+      const {area,cx,cy,cz}=triAreaAndCentroid(pos[ia],pos[ia+1],pos[ia+2], pos[ib],pos[ib+1],pos[ib+2], pos[ic],pos[ic+1],pos[ic+2]);
+      if(area>0){ sumA+=area; sx+=area*cx; sy+=area*cy; sz+=area*cz; }
+    }
+    if(sumA>0) out.push({id:p.id, center:new THREE.Vector3(sx/sumA, sy/sumA, sz/sumA)});
+    else { const box=new THREE.Box3().makeEmpty(); for(let i=s;i<e;i++){ const iv=(idx[i]|0)*3; _v.set(pos[iv],pos[iv+1],pos[iv+2]); box.expandByPoint(_v); }
+           const c=new THREE.Vector3(); box.getCenter(c); out.push({id:p.id,center:c}); }
+  }
+  return out;
+}
+function buildPanelHitBoxes(fullGeom, panels){
+  const pos=fullGeom.getAttribute('position').array, idx=fullGeom.getIndex().array, boxes=[];
+  for(const p of panels){
+    const s=p.start|0,e=s+(p.count|0); const box=new THREE.Box3().makeEmpty();
+    for(let i=s;i<e;i++){ const vi=idx[i]*3; _v.set(pos[vi],pos[vi+1],pos[vi+2]); box.expandByPoint(_v); }
+    const c=new THREE.Vector3(); box.getCenter(c); boxes.push({box,id:p.id,center:c});
+  }
+  return boxes;
+}
+function makeDotTexture(){ const S=64,c=document.createElement('canvas'); c.width=c.height=S; const g=c.getContext('2d'); g.clearRect(0,0,S,S); g.beginPath(); g.arc(S/2,S/2,S*0.45,0,Math.PI*2); g.fillStyle='#fff'; g.fill(); const tex=new THREE.CanvasTexture(c); tex.minFilter=THREE.LinearFilter; tex.wrapS=tex.wrapT=THREE.ClampToEdgeWrapping; return tex; }
+function buildCentroidsPoints(centers, size=3){
+  if(!dotTexture) dotTexture=makeDotTexture();
+  const tPos=[],dPos=[],lPos=[];
+  for(const {id,center} of centers){ const tag=id[0].toUpperCase(); (tag==='T'?tPos:tag==='D'?dPos:lPos).push(center.x,center.y,center.z); }
+  const mk=(arr,color)=>{ const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(arr),3));
+    const m=new THREE.PointsMaterial({size, sizeAttenuation:false, color, map:dotTexture, transparent:true, alphaTest:0.5, depthWrite:true}); return new THREE.Points(g,m); };
+  const group=new THREE.Group(); centroidsT=tPos.length?mk(tPos,0xff00ff):null; centroidsD=dPos.length?mk(dPos,0xffff00):null; centroidsL=lPos.length?mk(lPos,0xff7f00):null;
+  if(centroidsT) group.add(centroidsT); if(centroidsD) group.add(centroidsD); if(centroidsL) group.add(centroidsL); return group;
+}
+function syncCentroidVisibility(){
+  const mode = modeSel.value;
+  const isDev = (mode === 'dev');
+  const isWB  = (mode === 'workbench');
+
+  // Centroids are allowed in Dev and Workbench only; Preview => always hidden
+  const master = (isDev || isWB) && visC.checked;
+
+  if (centroidsT) centroidsT.visible = master && visT.checked;
+  if (centroidsD) centroidsD.visible = master && visD.checked;
+  if (centroidsL) centroidsL.visible = master && visL.checked;
+
+  if (centroidsGroup) centroidsGroup.visible = master;
+}
+
+function buildCrosshair(center, radius){
+  const len=Math.max(0.005, radius*0.06);
+  const pts=new Float32Array([ -len,0,0, len,0,0,  0,-len,0, 0,len,0,  0,0,-len, 0,0,len ]);
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pts,3));
+  const m=new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0.95 });
+  const lines=new THREE.LineSegments(g,m); lines.position.copy(center); return lines;
+}
+function buildAxisLines(center, rad){
+  // Long lines within camera far: far = rad * 100 (set later). Use 0.9*far.
+  const far = Math.max(500, rad*100);
+  const L = far * 0.9;
+  const make = (dx,dy,dz,color)=> {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+      center.x - dx, center.y - dy, center.z - dz,
+      center.x + dx, center.y + dy, center.z + dz
+    ]),3));
+    const m = new THREE.LineBasicMaterial({ color });
+    return new THREE.LineSegments(g,m);
+  };
+  const X = make(L,0,0, 0xff3a3a);
+  const Y = make(0,L,0, 0x32ff32);
+  const Z = make(0,0,L, 0x3a8bff);
+  const g = new THREE.Group(); g.add(X,Y,Z); return g;
+}
+function buildPreviewMesh(fullGeom){
+  const pos=fullGeom.getAttribute('position');
+  const colors=new Float32Array(pos.count*4);
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',pos); g.setIndex(fullGeom.getIndex()); g.setAttribute('color', new THREE.BufferAttribute(colors,4));
+  const m=new THREE.MeshBasicMaterial({ vertexColors:true, transparent:true, depthWrite:false, side:THREE.DoubleSide });
+  const mesh=new THREE.Mesh(g,m); mesh.visible=false; return mesh;
+}
+function applyPreviewColors(){
+  if (!previewMesh || !domeMeta) return;
+
+  const inPreview = (modeSel.value === 'preview');
+  const colors = previewMesh.geometry.getAttribute('color').array;
+  const idx = fullGeom.getIndex().array;
+
+  for (const p of domeMeta.panels){
+    // base rgba from SceneAPI (linear)
+    const src = SceneAPI._rgbaById.get(p.id) || [1,1,1,1];
+    let r = src[0], g = src[1], b = src[2];
+
+    // default alpha is 1 unless explicitly set
+    let a = SceneAPI._explicitAlpha.has(p.id) ? clamp01(src[3]) : 1.0;
+
+    // In Preview ONLY: respect Dev toggles for T/D/L by zeroing alpha
+    if (inPreview){
+      const tag = p.id[0].toUpperCase();
+      if (tag === 'T' && !visT.checked) a = 0;
+      else if (tag === 'D' && !visD.checked) a = 0;
+      else if (tag === 'L' && !visL.checked) a = 0;
+    }
+
+    // write per-vertex RGBA for this panel's indices
+    for (let i=p.start|0, end=(p.start|0)+(p.count|0); i<end; i++){
+      const vi = (idx[i]|0) * 4;
+      colors[vi+0]=r; colors[vi+1]=g; colors[vi+2]=b; colors[vi+3]=a;
+    }
+  }
+  previewMesh.geometry.getAttribute('color').needsUpdate = true;
+}
+
+
+
+function applyFaceMode(){
+  if(!previewMesh) return;
+  const v=faceMode.value;
+  if (v==='front') previewMesh.material.side = THREE.FrontSide;
+  else if (v==='back') previewMesh.material.side = THREE.BackSide;
+  else previewMesh.material.side = THREE.DoubleSide;
+  previewMesh.material.needsUpdate=true;
+}
+
+/* Axis view snapping (Workbench) */
+function setAxisView(axis){
+  if (!domeMeta || !fullGeom) return;
+  const center = (fullGeom?.boundingSphere?.center?.clone?.())
+    ?? new THREE.Vector3(...domeMeta.center);
+  const rad = fullGeom.boundingSphere?.radius || 1;
+  const dist = Math.max(0.5, rad * 2.4);
+
+  // default up vector
+  camera.up.set(0,1,0);
+
+  let pos = new THREE.Vector3();
+  if (axis === 'x') {
+    pos.set(center.x + dist, center.y, center.z);
+    camera.up.set(0,1,0); // Y-up
+  } else if (axis === 'y') {
+    pos.set(center.x, center.y + dist, center.z); // top view
+    camera.up.set(0,0,1); // Z-up for top view
+  } else { // 'z'
+    pos.set(center.x, center.y, center.z + dist);
+    camera.up.set(0,1,0);
+  }
+
+  controls.target.copy(center);
+  camera.position.copy(pos);
+  camera.lookAt(center);
+  controls.update();
+}
+
+/* Picking + readouts */
+function setHud(id){ if(id===lastPanelId) return; lastPanelId=id; idHud.textContent='ID: ' + (id ?? '—'); }
+const _ndc = new THREE.Vector2();
+function onPointerMove(ev){
+  if(!panelBoxes.length) return;
+  const rect=renderer.domElement.getBoundingClientRect();
+  _ndc.set(((ev.clientX-rect.left)/rect.width)*2-1, -((ev.clientY-rect.top)/rect.height)*2+1);
+  const ray=new THREE.Ray(); ray.origin.copy(camera.position);
+  ray.direction.set(_ndc.x,_ndc.y,0.5).unproject(camera).sub(camera.position).normalize();
+  let best=null, bestD=Infinity; const tmp=new THREE.Vector3();
+  for(const {box,id} of panelBoxes){ const hit=ray.intersectBox(box,tmp); if(hit){ const d=camera.position.distanceToSquared(hit); if(d<bestD){ bestD=d; best=id; } } }
+  setHud(best||null);
+}
+const rad2deg=r=>r*180/Math.PI;
+function updateAngleHud(){
+  if(modeSel.value!=='dev'){ angHud.classList.add('hidden'); return; }
+  angHud.classList.remove('hidden');
+  const az=rad2deg(controls.getAzimuthalAngle()), pol=rad2deg(controls.getPolarAngle());
+  const el=90-pol, dist=camera.position.distanceTo(controls.target);
+  angHud.textContent=`az: ${az.toFixed(1)}°  el: ${el.toFixed(1)}°  dist: ${dist.toFixed(2)}`;
+}
+
+/* ---------- bootstrap ---------- */
+function initRenderer(){
+  renderer=new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  // BACKGROUND COLOR
+  renderer.setClearColor('rgb(0,0,0)',1);
+  //renderer.setClearColor('rgb(28,28,28)',1);
+  app.appendChild(renderer.domElement);
+
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.01, 5000);
+
+  controls=new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping=true; controls.dampingFactor=0.06;
+  controls.minDistance=0.1; controls.maxDistance=2000; controls.autoRotate=false;
+
+  window.addEventListener('resize', ()=>{ 
+    camera.aspect=innerWidth/innerHeight; 
+    camera.updateProjectionMatrix(); 
+    renderer.setSize(innerWidth,innerHeight); 
+    updateAngleHud(); 
+  });
+
+  renderer.setAnimationLoop(()=>{ Engine.tick(); controls.update(); renderer.render(scene,camera); updateAngleHud(); });
+  
+}
+
+
+/* ---------------- */
+
+function addBaked(mod){
+  [dev_T_mesh,dev_D_lines,dev_L_lines,previewMesh,centroidsGroup,crosshair,axisLines].forEach(o=>{
+    if(o){ scene.remove(o); o.geometry?.dispose?.(); o.material?.dispose?.(); }
+  });
+  if (domeRoot){ scene.remove(domeRoot); domeRoot.clear(); domeRoot = null; }
+  dev_T_mesh=dev_D_lines=dev_L_lines=previewMesh=centroidsGroup=crosshair=axisLines=null;
+  panelBoxes.length=0; lastPanelId=null;
+
+  const { domeMesh, buildGeometry } = mod;
+  domeMeta = domeMesh;
+  fullGeom = buildGeometry(THREE, domeMesh);
+  fullGeom.computeBoundingSphere();
+
+  const { gT,gD,gL } = buildSeparated(fullGeom, domeMeta.panels);
+
+  // DEV visuals: magenta / yellow / orange (as before)
+  dev_T_mesh = new THREE.Mesh(gT, new THREE.MeshBasicMaterial({ color:0xff00ff, wireframe:true }));
+  dev_D_lines = new THREE.LineSegments(gD, new THREE.LineBasicMaterial({ color:0xffff00 }));
+  dev_L_lines = new THREE.LineSegments(gL, new THREE.LineBasicMaterial({ color:0xff7f00 }));
+  scene.add(dev_T_mesh, dev_D_lines, dev_L_lines);
+
+  panelBoxes = buildPanelHitBoxes(fullGeom, domeMeta.panels);
+
+  // ids
+  SceneAPI.ids.T = domeMeta.panels.filter(p=>p.id[0].toUpperCase()==='T').map(p=>p.id);
+  SceneAPI.ids.D = domeMeta.panels.filter(p=>p.id[0].toUpperCase()==='D').map(p=>p.id);
+  SceneAPI.ids.L = domeMeta.panels.filter(p=>p.id[0].toUpperCase()==='L').map(p=>p.id);
+
+  const centers = computePanelCentroids(fullGeom, domeMeta.panels);
+  centroidsGroup = buildCentroidsPoints(centers, 3); scene.add(centroidsGroup);
+
+  const center = (fullGeom?.boundingSphere?.center?.clone?.())
+    ?? new THREE.Vector3(...domeMeta.center);
+  const rad = fullGeom.boundingSphere?.radius || 1;
+
+  previewMesh = buildPreviewMesh(fullGeom); scene.add(previewMesh);
+
+  // Tiny white crosshair + long RGB axis lines
+  crosshair = buildCrosshair(center, rad); scene.add(crosshair);
+  axisLines = buildAxisLines(center, rad); scene.add(axisLines);
+
+  // Create a pivot at the dome center and reparent visuals under it
+  domeRoot = new THREE.Group();
+  domeRoot.position.copy(center);
+  scene.add(domeRoot);
+
+  // Workbench primitives group at center pivot
+  wbGroup = new THREE.Group();
+  wbGroup.name = 'WorkbenchPrimitives';
+  domeRoot.add(wbGroup);
+
+  // Preserve world transforms while parenting under the pivot
+  if (dev_T_mesh) domeRoot.attach(dev_T_mesh);
+  if (dev_D_lines) domeRoot.attach(dev_D_lines);
+  if (dev_L_lines) domeRoot.attach(dev_L_lines);
+  if (previewMesh) domeRoot.attach(previewMesh);
+  if (centroidsGroup) domeRoot.attach(centroidsGroup);
+  if (crosshair) domeRoot.attach(crosshair);
+  if (axisLines) domeRoot.attach(axisLines);
+
+  SceneAPI.info = { center:{ x:center.x, y:center.y, z:center.z }, radius: rad };
+
+  const dist=Math.max(0.5, rad*2.4);
+  camera.near = Math.max(0.01, rad*0.01);
+  camera.far  = Math.max(camera.far, rad*100); // ensure axis lines render
+  camera.updateProjectionMatrix();
+
+  const camOffset=new THREE.Vector3().setFromSpherical(new THREE.Spherical(dist, START_POLAR, START_AZ));
+  controls.target.copy(center); camera.position.copy(center).add(camOffset); camera.lookAt(controls.target); controls.update();
+
+  SceneAPI.resetColorsTo([1,1,1,1]); applyPreviewColors(); setMode(modeSel.value);
+}
+
+/* ---------- UI wiring ---------- */
+modeSel.addEventListener('change', ()=> setMode(modeSel.value));
+[visT,visD,visL,visC].forEach(el => el.addEventListener('change', () => {
+  if (modeSel.value === 'dev') {
+    if (dev_T_mesh)  dev_T_mesh.visible  = visT.checked;
+    if (dev_D_lines) dev_D_lines.visible = visD.checked;
+    if (dev_L_lines) dev_L_lines.visible = visL.checked;
+    syncCentroidVisibility();
+  } else if (modeSel.value === 'workbench') {
+    // Keep WB wiring the same; just ensure centroids mirror the checkbox
+    syncCentroidVisibility();
+  } else {
+    // Preview: no centroids; keep surface rule intact
+    if (previewMesh) previewMesh.visible = (modeSel.value === 'preview' && !wireOverride);
+  }
+}));
+
+
+faceMode.addEventListener('change', ()=>{ applyFaceMode(); });
+
+seqSel.addEventListener('change', ()=> SequenceManager.loadById(seqSel.value));
+loadBtn.addEventListener('click', ()=> SequenceManager.loadById(seqSel.value));
+playBtn.addEventListener('click', ()=> Engine.play());
+pauseBtn.addEventListener('click', ()=> Engine.pause());
+scrub.addEventListener('input', ()=>{ Engine.t=Number(scrub.value)||0; tVal.textContent=Engine.t.toFixed(2); 
+  SequenceManager.update(Engine.t,0); if(modeSel.value!=='dev') applyPreviewColors(); 
+});
+bakeBtn.addEventListener('click', bakeToJSON);
+
+/* Workbench axis buttons */
+viewX.addEventListener('click', (e)=>{ e.preventDefault(); e.stopImmediatePropagation(); toggleAxisView('x'); });
+viewY.addEventListener('click', (e)=>{ e.preventDefault(); e.stopImmediatePropagation(); toggleAxisView('y'); });
+viewZ.addEventListener('click', (e)=>{ e.preventDefault(); e.stopImmediatePropagation(); toggleAxisView('z'); });
+
+
+/* Workbench primitives UI */
+wbAddPrim.addEventListener('click', ()=> {
+  const type = (wbPrimType?.value || 'plane');
+  createPrimitive(type);
+});
+
+/* ---------- boot ---------- */
+function init(){
+  initRenderer();
+  addBaked(DOME);
+  SequenceManager.discover();
+  window.addEventListener('pointermove', onPointerMove, { passive:true });
+  setMode('preview');             // default start: Preview
+  faceMode.value = 'front';       // Preview default = Front
+  applyFaceMode();
+}
+init();
+window.refreshWBList = refreshWBList;
+
+window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
+</script>
+</div>
+
+
+<script>
+// Nuke bake-name history/autofill without breaking anything else
+(() => {
+  const el = document.getElementById('wbName');
+  if (!el) return;
+
+  // Enforce no-hints on every load
+  el.setAttribute('autocomplete', 'off');
+  el.setAttribute('autocapitalize', 'off');
+  el.setAttribute('autocorrect', 'off');
+  el.setAttribute('spellcheck', 'false');
+  el.setAttribute('aria-autocomplete', 'none');
+
+  // If inside a <form>, disable autofill there too
+  if (el.form) el.form.setAttribute('autocomplete', 'off');
+
+  // Randomize the 'name' to defeat history matching (keeps id the same)
+  const salt = Math.random().toString(36).slice(2, 8);
+  el.name = `wbname_${salt}`;
+
+  // If a datalist was wired, detach it
+  if (el.hasAttribute('list')) el.removeAttribute('list');
+})();
+</script>
+
+
+<script>
+// ===== Single-source Bake wiring (idempotent v2) =====
+(() => {
+  if (window.__WB_WIRED__) return;
+  window.__WB_WIRED__ = true;
+
+  if (typeof window.downloadJSON !== 'function') {
+    window.downloadJSON = function(obj, filename){
+      try {
+        const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename || 'workbench.bench.json';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 100);
+      } catch (e) { console.error('[downloadJSON] failed', e); }
+    };
+  }
+
+  function safeName(s){ const b=(s||'workbench').trim()||'workbench'; return b.replace(/[^\w.-]+/g,'-'); }
+
+  function wire(){
+    const btn = document.querySelector('#wbBake, #wbBakeRipp, [data-action="bake-bench"]');
+    if (!btn) { console.warn('[Bake] button not found'); return; }
+    btn.addEventListener('click', (ev) => {
+      try {
+        ev.stopImmediatePropagation(); // guard against any remaining delegates
+        if (typeof window.buildBenchJSON !== 'function') throw new Error('buildBenchJSON missing');
+        const bench = window.buildBenchJSON();
+        const nameEl = document.querySelector('#wbName, [name="benchName"], [data-bench-name]');
+        const base = safeName((nameEl?.value) || bench?.name || 'workbench');
+        if (!bench.name) bench.name = base;
+        window.downloadJSON(bench, `${base}.bench.json`);
+      } catch (e) {
+        console.error('[Bake] failed:', e);
+        alert('Bake failed: ' + (e?.message || e));
+      }
+    }, { passive: true });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire, { once: true });
+  else wire();
+})();
+</script>
+</body>
+</html>

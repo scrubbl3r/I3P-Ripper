@@ -1,0 +1,222 @@
+{
+  "benchVersion": 1,
+  "name": "Dome Previsualizer — Dev / Preview / Workbench",
+  "manifest": {
+    "kind": "ripper-bench",
+    "specVersion": "1.0",
+    "description": "Workbench export for vibe-to-ripp generation (self-describing)."
+  },
+  "rippContract": {
+    "target": "ripp@1",
+    "moduleFormat": "esm",
+    "entryFile": "Ripps/_index.js",
+    "expects": {
+      "paths": [
+        "line",
+        "curve",
+        "orbit",
+        "parametric"
+      ],
+      "objects": [
+        "plane",
+        "cube",
+        "sphere",
+        "cone"
+      ],
+      "units": "worldUnits",
+      "upAxis": "Y",
+      "handedness": "right"
+    },
+    "intentsSchema": {
+      "spawner": [
+        "spawnEveryMs",
+        "maxInstances",
+        "startDelayMs",
+        "posJitter",
+        "rotJitterDeg",
+        "scaleJitter"
+      ],
+      "motionDefaults": [
+        "moveMode",
+        "durationMs",
+        "easing",
+        "align",
+        "upMode",
+        "scaleMode"
+      ],
+      "lifecycle": [
+        "spawnAtStart",
+        "destroyAtEnd",
+        "dwellStartMs",
+        "dwellEndMs"
+      ],
+      "collision": [
+        "applyTo",
+        "with",
+        "evaluator",
+        "radius",
+        "falloff",
+        "blend",
+        "color"
+      ],
+      "fanout": [
+        "count",
+        "path",
+        "phaseMode"
+      ],
+      "pathMutate": [
+        "path",
+        "modifiers"
+      ]
+    },
+    "defaults": {
+      "moveMode": "traverse",
+      "durationMs": 2000,
+      "easing": "linear",
+      "spawnEveryMs": null,
+      "destroyAtEnd": true,
+      "collisionEnabled": false
+    }
+  },
+  "units": {
+    "base": "DD",
+    "overscanDD": null,
+    "worldPerDD": 700,
+    "scales": {
+      "DD": 700,
+      "DM": 7,
+      "DC": 0.07,
+      "uDD": 700
+    },
+    "angle": "deg",
+    "time": "ms",
+    "notes": "Canon: 700 WU = 100 DM; 100 DM = 1 DD (thus 1 DD = 700 WU). Stored values are WU."
+  },
+  "dome": {
+    "radius": 250,
+    "segments": [
+      64,
+      64
+    ],
+    "origin": [
+      0,
+      0,
+      0
+    ]
+  },
+  "aliases": {
+    "ring": "orbit-*",
+    "planes": "plane-*",
+    "line A": "line-001"
+  },
+  "paths": [
+    {
+      "id": "line-001",
+      "type": "line",
+      "params": {
+        "start": [
+          -60,
+          0.001,
+          0
+        ],
+        "end": [
+          70,
+          0.001,
+          0
+        ]
+      }
+    }
+  ],
+  "objects": [
+    {
+      "id": "plane-002",
+      "type": "plane",
+      "params": {},
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          90,
+          0
+        ],
+        "scale": [
+          6.906873636098363,
+          6.906873636098363,
+          2.0999999999999996
+        ]
+      },
+      "material": {
+        "baseColor": "#ffffff"
+      }
+    }
+  ],
+  "attachments": [
+    {
+      "objectId": "plane-002",
+      "pathId": "line-001",
+      "follow": {
+        "t": 0,
+        "align": "perp",
+        "upMode": "world",
+        "loop": false,
+        "reverse": false
+      }
+    }
+  ],
+  "intents": [
+    {
+      "type": "motionDefaults",
+      "applyTo": "allAttached",
+      "moveMode": "traverse",
+      "durationMs": 2000,
+      "easing": "linear",
+      "align": "perp",
+      "upMode": "world",
+      "scaleMode": "relativeToPath"
+    },
+    {
+      "type": "lifecycle",
+      "applyTo": "allAttached",
+      "spawnAtStart": true,
+      "destroyAtEnd": true,
+      "dwellStartMs": 0,
+      "dwellEndMs": 0
+    },
+    {
+      "type": "spawner",
+      "applyTo": "none",
+      "spawnEveryMs": null,
+      "maxInstances": 64,
+      "startDelayMs": 0,
+      "posJitter": [
+        0,
+        0,
+        0
+      ],
+      "rotJitterDeg": [
+        0,
+        0,
+        0
+      ],
+      "scaleJitter": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "collision",
+      "applyTo": "none",
+      "with": "dome",
+      "evaluator": "auto",
+      "radius": "20DM",
+      "falloff": "smoothstep",
+      "blend": "max",
+      "color": "randomPalette"
+    }
+  ]
+}

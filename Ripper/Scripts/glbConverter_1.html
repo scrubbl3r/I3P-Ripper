@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>GLB → baked vectors + panel IDs + centroids</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  html,body{height:100%;margin:0;background:#0b0b0b;color:#eee;font:14px system-ui}
+  .box{max-width:780px;margin:8vh auto;padding:16px;border:1px solid #333;border-radius:12px;background:#111}
+  .drop{padding:28px;border:1px dashed #555;border-radius:12px;text-align:center}
+  .drop.active{background:#151d10;border-color:#7dd35f}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
+  button,input,select{padding:8px 10px;border-radius:10px;border:1px solid #333;background:#151515;color:#fff}
+  code{background:#000;padding:2px 6px;border-radius:6px;border:1px solid #333}
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "GLTFLoader": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js"
+}}
+</script>
+</head>
+<body>
+  <div class="box">
+    <h2>GLB → baked vectors + panel IDs + centroids</h2>
+    <p>Drop a <code>.glb</code>. Output: <code>dome.mesh.js</code> with quantized positions, indices, centroids, and a <code>panels[]</code>/<code>byId</code> map.</p>
+    <div id="drop" class="drop">Drop .glb here (or click)</div>
+    <div class="row">
+      <label>Quant bits: <input id="quant" type="number" min="10" max="16" step="1" value="14"></label>
+      <label><input id="merge" type="checkbox" checked> Merge all meshes into one (recommended)</label>
+      <label><input id="sanitize" type="checkbox" checked> Sanitize names (safe JS IDs)</label>
+    </div>
+    <div id="out" style="margin-top:12px;opacity:.85"></div>
+  </div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'GLTFLoader';
+
+const drop = document.getElementById('drop');
+const out = document.getElementById('out');
+const quantEl = document.getElementById('quant');
+const mergeEl = document.getElementById('merge');      // reserved; currently always merged
+const sanitizeEl = document.getElementById('sanitize');
+
+function fmtBytes(n){const u=['B','KB','MB','GB'];let i=0;while(n>1024&&i<u.length-1){n/=1024;i++}return n.toFixed(1)+' '+u[i];}
+const safe = s => s.replace(/[^\w\-\.]/g,'_'); // simple sanitizer for panel IDs
+
+async function loadGLB(file){
+  const url = URL.createObjectURL(file);
+  const gltf = await new GLTFLoader().loadAsync(url);
+  URL.revokeObjectURL(url);
+  return gltf.scene || gltf.scenes?.[0];
+}
+
+function collectMeshes(root){
+  const arr=[]; root.traverse(o=>{ if (o.isMesh && o.geometry) arr.push(o); });
+  // sort for deterministic order (by name then UUID)
+  arr.sort((a,b)=>(a.name||'').localeCompare(b.name||'') || a.uuid.localeCompare(b.uuid));
+  return arr;
+}
+
+function mergeWithPanelRanges(meshes, sanitizeNames){
+  // Build one big geometry; track per-mesh index range + centroid.
+  const positions=[]; const indices=[];
+  const panels=[]; // {id,start,count,centroid:[x,y,z]}
+  let vertBase=0;
+  const m4 = new THREE.Matrix4(); const v = new THREE.Vector3();
+
+  // de-dupe IDs after sanitizing (panel, panel_2, panel_3, …)
+  const counts = new Map();
+  const makeId = (raw) => {
+    const base = sanitizeNames ? safe(raw || 'panel') : (raw || 'panel');
+    const n = counts.get(base) || 0;
+    counts.set(base, n+1);
+    return n ? `${base}_${n+1}` : base;
+  };
+
+  for (const m of meshes){
+    const id = makeId(m.name);
+    const g = m.geometry; if (!g.getAttribute('position')) continue;
+    const posAttr = g.getAttribute('position');
+    const idxAttr = g.getIndex();
+
+    m.updateWorldMatrix(true,true); m4.copy(m.matrixWorld);
+
+    // positions (world) + accumulate centroid
+    let sx=0, sy=0, sz=0;
+    for (let i=0;i<posAttr.count;i++){
+      v.fromBufferAttribute(posAttr, i).applyMatrix4(m4);
+      positions.push(v.x, v.y, v.z);
+      sx += v.x; sy += v.y; sz += v.z;
+    }
+    const centroid = [ sx/posAttr.count, sy/posAttr.count, sz/posAttr.count ];
+
+    const start = indices.length;
+    if (idxAttr){
+      const a = idxAttr.array;
+      for (let i=0;i<a.length;i++){ indices.push(a[i] + vertBase); }
+    } else {
+      for (let i=0;i<posAttr.count;i+=3) { indices.push(vertBase+i, vertBase+i+1, vertBase+i+2); }
+    }
+    const count = indices.length - start;
+    panels.push({ id, start, count, centroid });
+
+    vertBase += posAttr.count;
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+  const useU16 = (vertBase <= 65535);
+  geom.setIndex(new THREE.BufferAttribute(useU16 ? new Uint16Array(indices) : new Uint32Array(indices), 1));
+  return { geom, panels, indexType: useU16 ? 'uint16' : 'uint32' };
+}
+
+function quantizePositions(geom, bits){
+  const pos = geom.getAttribute('position');
+  const box = new THREE.Box3().setFromBufferAttribute(pos);
+  const center = new THREE.Vector3(); box.getCenter(center);
+  const size = new THREE.Vector3(); box.getSize(size);
+  const maxDim = Math.max(size.x,size.y,size.z) || 1;
+  const scale = maxDim/2; const inv = 1/scale;
+
+  const range = (1<<bits) - 1;
+  const halfInt = range >> 1; // integer half-range
+  const src = pos.array; const q = new Int16Array(src.length);
+
+  for (let i=0;i<src.length;i+=3){
+    const nx = (src[i]   - center.x) * inv;
+    const ny = (src[i+1] - center.y) * inv;
+    const nz = (src[i+2] - center.z) * inv;
+    q[i]   = Math.max(-halfInt, Math.min(halfInt, Math.round(nx * halfInt)));
+    q[i+1] = Math.max(-halfInt, Math.min(halfInt, Math.round(ny * halfInt)));
+    q[i+2] = Math.max(-halfInt, Math.min(halfInt, Math.round(nz * halfInt)));
+  }
+  return { q, center:[center.x,center.y,center.z], scale };
+}
+
+function b64(typed){
+  const u8 = new Uint8Array(typed.buffer);
+  let bin='', chunk=0x8000;
+  for (let i=0;i<u8.length;i+=chunk) bin += String.fromCharCode.apply(null, u8.subarray(i,i+chunk));
+  return btoa(bin);
+}
+
+function download(name, text){
+  const blob = new Blob([text], {type:'application/javascript'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 0);
+}
+
+async function handle(file){
+  out.textContent='Loading GLB…';
+  const root = await loadGLB(file);
+  const meshes = collectMeshes(root);
+  if (!meshes.length){ out.textContent='No meshes found.'; return; }
+  out.textContent=`Found ${meshes.length} meshes (panels)… baking…`;
+
+  const { geom, panels, indexType } = mergeWithPanelRanges(meshes, sanitizeEl.checked);
+  const bits = Number(quantEl.value||14);
+  const { q, center, scale } = quantizePositions(geom, bits);
+
+  const idx = geom.getIndex().array;
+  const idxTyped = (indexType==='uint16') ? new Uint16Array(idx) : new Uint32Array(idx);
+
+  const byId = Object.fromEntries(
+    panels.map(p => [p.id, { start:p.start, count:p.count, centroid:p.centroid }])
+  );
+
+  const js = `// baked from ${file.name} — merged with per-panel index ranges + centroids
+export const domeMesh = {
+  meta: { source: ${JSON.stringify(file.name)}, quantBits: ${bits}, merged: true, panelCount: ${panels.length} },
+  center: ${JSON.stringify(center)},
+  scale: ${JSON.stringify(scale)},
+  indexType: "${indexType}",
+  positions_b64: "${b64(q)}",      // Int16
+  indices_b64: "${b64(idxTyped)}", // Uint16/Uint32
+  panels: ${JSON.stringify(panels)}, // [{id,start,count,centroid:[x,y,z]}]
+  byId: ${JSON.stringify(byId)}     // { id: {start,count,centroid} }
+};
+
+export function decodeBase64(b64){
+  const bin = atob(b64), len=bin.length; const buf=new Uint8Array(len);
+  for(let i=0;i<len;i++) buf[i]=bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+// convenience: load + dequantize to a THREE.BufferGeometry
+export function buildGeometry(THREE, baked=domeMesh){
+  const { positions_b64, indices_b64, indexType, center, scale, meta } = baked;
+  const posI16 = new Int16Array(decodeBase64(positions_b64));
+  const idxArr = indexType === 'uint16'
+    ? new Uint16Array(decodeBase64(indices_b64))
+    : new Uint32Array(decodeBase64(indices_b64));
+  const halfInt = (1 << meta.quantBits) >> 1;
+  const invHalf = 1 / halfInt;
+  const out = new Float32Array(posI16.length);
+  for (let i=0;i<posI16.length;i+=3){
+    out[i  ] = (posI16[i  ] * invHalf) * scale + center[0];
+    out[i+1] = (posI16[i+1] * invHalf) * scale + center[1];
+    out[i+2] = (posI16[i+2] * invHalf) * scale + center[2];
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(out, 3));
+  g.setIndex(new THREE.BufferAttribute(idxArr, 1));
+  g.computeBoundingSphere();
+  return g;
+}
+`;
+
+  const inBytes = file.size;
+  const outBytes = js.length;
+  out.innerHTML = `
+    Panels: <b>${meshes.length}</b><br/>
+    Input GLB: <b>${fmtBytes(inBytes)}</b><br/>
+    Baked module (text): <b>${fmtBytes(outBytes)}</b><br/>
+    <span style="opacity:.8">Tip: reducing quant bits (e.g. 13) shrinks further, usually visually identical for wireframe.</span>
+  `;
+  download('dome.mesh.js', js);
+}
+
+// UI
+drop.addEventListener('click', ()=>{
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='.glb,model/gltf-binary';
+  inp.onchange=()=>inp.files?.[0] && handle(inp.files[0]); inp.click();
+});
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('active');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('active');}));
+drop.addEventListener('drop', e=>{ const f=e.dataTransfer?.files?.[0]; if(f) handle(f); });
+</script>
+</body>
+</html>

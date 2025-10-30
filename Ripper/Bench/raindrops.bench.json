@@ -1,0 +1,230 @@
+{
+  "benchVersion": 1,
+  "name": "Dome Previsualizer — WU Build",
+  "manifest": {
+    "kind": "ripper-bench",
+    "specVersion": "1.0",
+    "description": "Workbench export for vibe-to-ripp generation (self-describing)."
+  },
+  "rippContract": {
+    "target": "ripp@1",
+    "moduleFormat": "esm",
+    "entryFile": "Ripps/_index.js",
+    "expects": {
+      "paths": [
+        "line",
+        "curve",
+        "orbit",
+        "parametric"
+      ],
+      "objects": [
+        "plane",
+        "cube",
+        "sphere",
+        "cone",
+        "cylinder"
+      ],
+      "units": "worldUnits",
+      "upAxis": "Y",
+      "handedness": "right"
+    },
+    "intentsSchema": {
+      "spawner": [
+        "spawnEveryMs",
+        "maxInstances",
+        "startDelayMs",
+        "posJitter",
+        "rotJitterDeg",
+        "scaleJitter"
+      ],
+      "motionDefaults": [
+        "moveMode",
+        "durationMs",
+        "easing",
+        "align",
+        "upMode",
+        "scaleMode"
+      ],
+      "lifecycle": [
+        "spawnAtStart",
+        "destroyAtEnd",
+        "dwellStartMs",
+        "dwellEndMs"
+      ],
+      "collision": [
+        "applyTo",
+        "with",
+        "evaluator",
+        "radius",
+        "falloff",
+        "blend",
+        "color"
+      ],
+      "fanout": [
+        "count",
+        "path",
+        "phaseMode"
+      ],
+      "pathMutate": [
+        "path",
+        "modifiers"
+      ]
+    },
+    "defaults": {
+      "moveMode": "traverse",
+      "durationMs": 2000,
+      "easing": "linear",
+      "spawnEveryMs": null,
+      "destroyAtEnd": true,
+      "collisionEnabled": false
+    }
+  },
+  "units": {
+    "base": "WU",
+    "worldPerDD": 700,
+    "overscanWU": null,
+    "scales": {
+      "WU": 1
+    },
+    "angle": "deg",
+    "time": "ms",
+    "notes": "Stored values are WU. (Legacy DD/DM/DC removed from scales.)"
+  },
+  "dome": {
+    "radius": 250,
+    "segments": [
+      64,
+      64
+    ],
+    "origin": [
+      0,
+      0,
+      0
+    ]
+  },
+  "aliases": {
+    "ring": "orbit-*",
+    "planes": "plane-*",
+    "line A": "line-001"
+  },
+  "paths": [
+    {
+      "id": "orbit-001",
+      "type": "orbit",
+      "params": {
+        "center": [
+          0,
+          0.001,
+          0
+        ],
+        "normal": [
+          0,
+          1,
+          0
+        ],
+        "radius": 54.052433434763465,
+        "startAngle": 0,
+        "endAngle": 180
+      }
+    }
+  ],
+  "objects": [
+    {
+      "id": "sphere-001",
+      "type": "sphere",
+      "params": {
+        "sizeWU": [
+          12,
+          12,
+          12
+        ],
+        "radiusWU": 6
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.8880266312460386,
+          0.8880266312460386,
+          0.8880266312460386
+        ]
+      },
+      "material": {
+        "baseColor": "#ffffff"
+      }
+    }
+  ],
+  "attachments": [
+    {
+      "objectId": "sphere-001",
+      "pathId": "orbit-001",
+      "follow": {
+        "t": 0,
+        "align": "perp",
+        "upMode": "world",
+        "loop": false,
+        "reverse": false
+      }
+    }
+  ],
+  "intents": [
+    {
+      "type": "motionDefaults",
+      "applyTo": "allAttached",
+      "moveMode": "traverse",
+      "durationMs": 2000,
+      "easing": "linear",
+      "align": "perp",
+      "upMode": "world",
+      "scaleMode": "relativeToPath"
+    },
+    {
+      "type": "lifecycle",
+      "applyTo": "allAttached",
+      "spawnAtStart": true,
+      "destroyAtEnd": true,
+      "dwellStartMs": 0,
+      "dwellEndMs": 0
+    },
+    {
+      "type": "spawner",
+      "applyTo": "none",
+      "spawnEveryMs": null,
+      "maxInstances": 64,
+      "startDelayMs": 0,
+      "posJitter": [
+        0,
+        0,
+        0
+      ],
+      "rotJitterDeg": [
+        0,
+        0,
+        0
+      ],
+      "scaleJitter": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "type": "collision",
+      "applyTo": "none",
+      "with": "dome",
+      "evaluator": "auto",
+      "radius": "20DM",
+      "falloff": "smoothstep",
+      "blend": "max",
+      "color": "randomPalette"
+    }
+  ]
+}
