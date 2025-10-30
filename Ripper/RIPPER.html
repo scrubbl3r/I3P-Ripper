@@ -1515,7 +1515,7 @@ function buildBenchJSON(){
   const rippContract = {
     target: "ripp@1",
     moduleFormat: "esm",
-    entryFile: "Ripps/_index.js",
+    entryFile: "Ripps/index.js",
     expects: {
       paths: ["line","curve","orbit","parametric"],
       objects: ["plane","cube","sphere","cone","cylinder"],
@@ -3304,10 +3304,10 @@ const SequenceManager = {
   async discover(){
     this.list.length=0;
     try{
-      const man = await import('./Ripps/_index.js');
+      const man = await import('./Ripps/index.js');
       const arr = Array.isArray(man.default) ? man.default : (man.list || []);
       for (const e of arr) this.list.push({ id:e.id, name:e.name || e.id });
-    }catch(e){ console.warn('Could not load /Ripps/_index.js', e); }
+    }catch(e){ console.warn('Could not load /Ripps/index.js', e); }
     populateSequences(); loadBtn.disabled=(this.list.length===0);
   },
   async loadById(id){
