@@ -7,6 +7,7 @@ export default [
   //{ id: 'sea-horizon-gradient', name: 'sea-horizon-gradient — 10s loop' },
   //{ id: 'sea-horizon', name: 'Sea Horizon — 10s loop' },
   { id: 'sea-horizon-gradient-2', name: 'sea-horizon-gradient-2 — 10s loop' },
+  { id: 'sea-horizon-brand', name: 'sea-horizon-gradient-brand' },
   //{ id: 'sea-horizon-gradient-3', name: 'sea-horizon-gradient-3 — 10s loop' },
   //{ id: 't_wave-3', name: 't_wave-3' },
   //{ id: 't_wave-4', name: 't_wave-4' },
