@@ -29,6 +29,7 @@ export default [
   //{ id: 'raindrops-2', name: 'raindrops-2' },
   //{ id: 'raindrops-3', name: 'raindrops-3' },
   { id: 'raindrops-7', name: 'vapor-paint' },
+  { id: 'raindrops-8', name: 'brand-paint' },
   //{ id: 'raindrops-6', name: '8bit volcano' },
   { id: 'raindrops-4', name: 'lava-matrix' },
   //{ id: 'raindrops-5', name: 'raindrops-5' },

@@ -390,6 +390,7 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
 { "imports": {
     "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
     "OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js"
+    ,"BufferGeometryUtils": "https://unpkg.com/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js"
 }}
 </script>
 </head>
@@ -585,6 +586,8 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
 
 <script type="module">
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'BufferGeometryUtils';
+Object.assign(THREE, { BufferGeometryUtils });
 import { OrbitControls } from 'OrbitControls';
 import * as DOME from './dome.mesh.js'; // hardcoded baked mesh
 
@@ -1350,10 +1353,9 @@ async function buildMeshBVH(mesh){
   if (!geom || !geom.isBufferGeometry) throw new Error('BVH: mesh has no BufferGeometry');
   if (!geom.attributes.position) throw new Error('BVH: geometry missing position attribute');
   if (!geom.index){
-    // ensure indexed to improve BVH quality
-    geom.setIndex(THREE.BufferGeometryUtils?.mergeVertices
-      ? THREE.BufferGeometryUtils.mergeVertices(geom).getIndex()
-      : geom.toNonIndexed().getIndex()); // fallback
+     // ensure indexed to improve BVH quality
+     const merged = THREE.BufferGeometryUtils.mergeVertices(geom);
+     geom.setIndex(merged.getIndex());
   }
   geom.computeBoundsTree({ strategy: mod.BVH_BUILD_STRATEGY.SAH });
   return geom.boundsTree;
@@ -2436,6 +2438,7 @@ if (wbEditorReset) wbEditorReset.addEventListener('click', ()=>{
   if(!wbEditing) return;
   const rec = wbEditing;
     if (rec.type === 'curve' && obj?.userData?.workbench?.params){
+    const obj = rec.mesh;
     const lift = 0.001;
     const r  = (SceneAPI?.info?.radius ?? (typeof getDomeRadiusFallback==='function' ? getDomeRadiusFallback(5) : 5));
     const L  = r;
@@ -3829,8 +3832,8 @@ function init(){
   applyFaceMode();
 }
 init();
+Object.assign(window, { renderer, scene, camera, controls, Engine });
 window.refreshWBList = refreshWBList;
-
 window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
 </script>
 </div>
@@ -3918,11 +3921,11 @@ window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
    =========================================================================== */
 
 const vrBtn = document.getElementById('vrBtn');
-
-// Safety: make sure the main renderer exists
-if (!vrBtn || !window || !window.navigator || !renderer) {
+// Safety: make sure the main renderer exists (from window, not module scope)
+if (!vrBtn || !window || !window.navigator || !window.renderer) {
   console.warn('[WebXR] VR button wiring skipped (no renderer or button).');
 } else {
+  const { renderer, controls } = window;
   renderer.xr.enabled = true;          // allow WebXR to take over the loop
   let xrSession = null;
 
