@@ -3934,6 +3934,40 @@ window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
     const { renderer, controls, Engine } = window;
     renderer.xr.enabled = true;
 
+
+  // [ANCHOR:xr-overlay-ui]
+  const xrUI = (function(){
+    const wrap = document.createElement('div');
+    wrap.id = 'xrOverlay';
+    wrap.style.cssText = `
+      position:fixed; left:50%; bottom:28px; transform:translateX(-50%);
+      display:none; gap:10px; z-index:9999; pointer-events:auto;
+    `;
+    const mkBtn = (label)=> {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = `
+        font:14px ui-monospace,Menlo,monospace; font-weight:600;
+        padding:10px 14px; border-radius:10px; border:1px solid #333;
+        background:rgba(0,0,0,.6); color:#eee; backdrop-filter:blur(6px);
+        cursor:pointer;
+      `;
+      return b;
+    };
+    const exitBtn = mkBtn('Exit VR');
+    const recBtn  = mkBtn('Recenter');
+    wrap.appendChild(recBtn);
+    wrap.appendChild(exitBtn);
+    document.body.appendChild(wrap);
+
+    return {
+      show(){ wrap.style.display = 'flex'; },
+      hide(){ wrap.style.display = 'none'; },
+      onExit(fn){ exitBtn.onclick = fn; },
+      onRecenter(fn){ recBtn.onclick = fn; }
+    };
+  })();
+
     let xrSession = null;
 
     // ---- UI helper ----
@@ -3960,35 +3994,119 @@ window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
       }
     }
 
+    
+
+  // [ANCHOR:xr-rig-helpers]
+  let xrLoopActive = false;
+
+  // Parent group of the WebXR ArrayCamera; safe to transform for user motion
+  function xrRig() {
+    const cam = renderer.xr.getCamera();
+    return cam && cam.parent ? cam.parent : null;
+  }
+
+  function xrRecenter() {
+    try {
+      const rig = xrRig(); if (!rig) return;
+      const t = (window.controls && window.controls.target)
+        ? window.controls.target.clone()
+        : new THREE.Vector3(0,0,0);
+      const dir = new THREE.Vector3().subVectors(t, rig.position).setY(0).normalize();
+      if (dir.lengthSq() === 0) return;
+      const yaw = Math.atan2(dir.x, dir.z) * -1;
+      rig.rotation.set(0, yaw, 0);
+    } catch(e){ console.warn('[XR] recenter failed', e); }
+  }
+
+  function xrGamepadLoop() {
+    const session = renderer.xr.getSession?.();
+    if (!session) { xrLoopActive = false; return; }
+    xrLoopActive = true;
+
+    const rig = xrRig();
+    const dt = 1/72;
+    const rotSpeed = 1.2;   // rad/s at full deflection
+    const dolly = 2.0;      // m/s at full deflection
+
+    let axX = 0, axY = 0, exitPressed = false;
+
+    try {
+      for (const src of session.inputSources) {
+        const gp = src && src.gamepad;
+        if (!gp) continue;
+        const x = gp.axes[2] ?? gp.axes[0] ?? 0;
+        const y = gp.axes[3] ?? gp.axes[1] ?? 0;
+        if (Math.abs(x) > Math.abs(axX)) axX = x;
+        if (Math.abs(y) > Math.abs(axY)) axY = y;
+        if (gp.buttons && gp.buttons[1] && gp.buttons[1].pressed) exitPressed = true; // B/Y
+      }
+    } catch(_) {}
+
+    if (rig) {
+      if (Math.abs(axX) > 0.05) rig.rotateY(-axX * rotSpeed * dt);
+      if (Math.abs(axY) > 0.05) rig.translateZ(axY * dolly * dt); // up = zoom in
+    }
+
+    if (exitPressed) exitXR();
+
+    if (xrLoopActive) requestAnimationFrame(xrGamepadLoop);
+  }
+
+
+
+
     // Prefer stable floor tracking as required; everything else optional.
-    const XR_FEATURES = {
+    // [ANCHOR:xr-features]
+    const VR_FEATURES = {
       requiredFeatures: ['local-floor'],
-      optionalFeatures: ['bounded-floor','hand-tracking','layers','anchors']
-    };
+      optionalFeatures: [
+      'bounded-floor',
+      'hand-tracking',
+      'layers',
+      'anchors',
+      'dom-overlay'
+    ],
+    domOverlay: { root: document.body }
+  };
 
     function onSessionStarted(session) {
       xrSession = session;
       renderer.xr.setSession(session);
-      if (controls) controls.enabled = false;   // HMD drives view
+      if (controls) controls.enabled = false;
       setBtnState({ text: 'Exit VR', active: true });
 
-      session.addEventListener('end', onSessionEnded);
-    }
+      // [ANCHOR:xr-overlay-hooks]
+      xrUI.show();
+      xrUI.onExit(() => exitXR());
+      xrUI.onRecenter(() => xrRecenter());
 
-    function onSessionEnded() {
-      xrSession = null;
-      if (controls) controls.enabled = true;
-      setBtnState({ text: 'Enter VR', active: false });
-    }
+      // [ANCHOR:xr-loop-start]
+      if (!xrLoopActive) requestAnimationFrame(xrGamepadLoop);
+
+      session.addEventListener('end', onSessionEnded);
+  }
+
+  function onSessionEnded() {
+    xrSession = null;
+    if (controls) controls.enabled = true;
+    setBtnState({ text: 'Enter VR', active: false });
+
+    // [ANCHOR:xr-overlay-hooks-end]
+    xrUI.hide();
+
+    // [ANCHOR:xr-loop-stop]
+    xrLoopActive = false;
+  }
 
     async function enterXR() {
       const mode = await getBestMode();
+      
       if (!mode) {
         alert('WebXR not available.\n\nTips:\n• Serve over HTTPS (or localhost).\n• Use a WebXR-capable browser (Quest Browser / recent Chrome/Edge).\n• Headset must be awake/authorized.');
         return;
       }
       try {
-        const session = await navigator.xr.requestSession(mode, XR_FEATURES);
+        const session = await navigator.xr.requestSession(mode, VR_FEATURES);
         onSessionStarted(session);
       } catch (e) {
         console.error('[WebXR] requestSession() failed:', e);
