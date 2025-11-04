@@ -582,12 +582,11 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
 
   // Expose to the global so your existing module can feature-detect later
   Object.assign(window, { Line2, LineMaterial, LineGeometry });
+  window.dispatchEvent(new Event('ripper-ready'));
 </script>
 
 <script type="module">
 import * as THREE from 'three';
-import * as BufferGeometryUtils from 'BufferGeometryUtils';
-Object.assign(THREE, { BufferGeometryUtils });
 import { OrbitControls } from 'OrbitControls';
 import * as DOME from './dome.mesh.js'; // hardcoded baked mesh
 
@@ -1353,9 +1352,10 @@ async function buildMeshBVH(mesh){
   if (!geom || !geom.isBufferGeometry) throw new Error('BVH: mesh has no BufferGeometry');
   if (!geom.attributes.position) throw new Error('BVH: geometry missing position attribute');
   if (!geom.index){
-     // ensure indexed to improve BVH quality
-     const merged = THREE.BufferGeometryUtils.mergeVertices(geom);
-     geom.setIndex(merged.getIndex());
+    // ensure indexed to improve BVH quality
+    geom.setIndex(THREE.BufferGeometryUtils?.mergeVertices
+      ? THREE.BufferGeometryUtils.mergeVertices(geom).getIndex()
+      : geom.toNonIndexed().getIndex()); // fallback
   }
   geom.computeBoundsTree({ strategy: mod.BVH_BUILD_STRATEGY.SAH });
   return geom.boundsTree;
@@ -3914,130 +3914,129 @@ window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
 
 <script type="module">
 /* ===========================================================================
-   Ripper WebXR Glue
-   - Adds a single “VR” button that toggles immersive sessions.
-   - No build step; no external deps; works with your existing animation loop.
-   - Gracefully degrades if WebXR isn't available (shows disabled button).
+   Ripper WebXR Glue (robust)
+   - Waits for `ripper-ready` so renderer is guaranteed to exist.
+   - Uses requiredFeatures: ['local-floor'] for better success.
+   - Clean UI state & control handoff.
    =========================================================================== */
 
-const vrBtn = document.getElementById('vrBtn');
-// Safety: make sure the main renderer exists (from window, not module scope)
-if (!vrBtn || !window || !window.navigator || !window.renderer) {
-  console.warn('[WebXR] VR button wiring skipped (no renderer or button).');
-} else {
-  const { renderer, controls } = window;
-  renderer.xr.enabled = true;          // allow WebXR to take over the loop
-  let xrSession = null;
+(function bootXR(){
+  const vrBtn = document.getElementById('vrBtn');
 
-  // Feature gates
-  const isSecure = window.isSecureContext;
-  const hasXR = !!navigator.xr;
-
-  // Optional/typical features for comfort + hands
-  const VR_FEATURES = {
-    optionalFeatures: [
-      'local-floor',
-      'bounded-floor',
-      'hand-tracking',
-      'layers',
-      'anchors'
-    ]
-  };
-
-  // UX helpers
-  function setBtnState({ text, disabled=false, active=false }) {
-    vrBtn.textContent = text;
-    vrBtn.title = text;
-    vrBtn.disabled = !!disabled;
-    vrBtn.classList.toggle('active', !!active);
-  }
-
-  // When a session starts/ends, update UI and controls
-  function onSessionStarted(session) {
-    xrSession = session;
-    renderer.xr.setSession(session);
-    // OrbitControls: turn off manual damping while in XR (HMD controls view)
-    if (controls) { controls.enabled = false; }
-    setBtnState({ text: 'Exit VR', active: true });
-
-    session.addEventListener('end', onSessionEnded);
-  }
-
-  function onSessionEnded() {
-    xrSession = null;
-    // Re-enable OrbitControls for desktop canvas
-    if (controls) { controls.enabled = true; }
-    setBtnState({ text: 'Enter VR', active: false });
-  }
-
-  // Try immersive-vr first; if that fails but immersive-ar exists, offer that.
-  async function getBestMode() {
-    try {
-      if (!hasXR || !isSecure) return null;
-      if (await navigator.xr.isSessionSupported('immersive-vr')) return 'immersive-vr';
-      if (await navigator.xr.isSessionSupported('immersive-ar')) return 'immersive-ar';
-      return null;
-    } catch (e) {
-      console.warn('[WebXR] support probe failed:', e);
-      return null;
-    }
-  }
-
-  async function enterXR() {
-    const mode = await getBestMode();
-    if (!mode) {
-      // Not supported: explain the common gotchas once
-      alert('WebXR not available.\n\nTips:\n• Use HTTPS (e.g., GitHub Pages) or an HTTPS tunnel for local dev.\n• Open in a WebXR-capable browser (Meta Browser on Quest, recent Chrome/Edge/Firefox Reality, etc.).\n• Make sure your headset is awake and you granted permissions.');
+  // Defer until renderer is published, then wire once.
+  function start() {
+    // Safety again (in case of hot reloads with detached DOM)
+    if (!vrBtn || !window?.renderer) {
+      console.warn('[WebXR] VR button wiring skipped (no renderer or button).');
       return;
     }
-    try {
-      const session = await navigator.xr.requestSession(mode, VR_FEATURES);
-      onSessionStarted(session);
-    } catch (e) {
-      console.error('[WebXR] requestSession() failed:', e);
-      alert('Could not start XR session. See console for details.');
+
+    const { renderer, controls, Engine } = window;
+    renderer.xr.enabled = true;
+
+    let xrSession = null;
+
+    // ---- UI helper ----
+    function setBtnState({ text, disabled=false, active=false, title }) {
+      vrBtn.textContent = text;
+      vrBtn.title = title || text;
+      vrBtn.disabled = !!disabled;
+      vrBtn.classList.toggle('active', !!active);
     }
+
+    // ---- Feature probe ----
+    const isSecure = window.isSecureContext;
+    const hasXR = !!navigator.xr;
+
+    async function getBestMode() {
+      try {
+        if (!hasXR || !isSecure) return null;
+        if (await navigator.xr.isSessionSupported('immersive-vr')) return 'immersive-vr';
+        if (await navigator.xr.isSessionSupported('immersive-ar')) return 'immersive-ar';
+        return null;
+      } catch (e) {
+        console.warn('[WebXR] support probe failed:', e);
+        return null;
+      }
+    }
+
+    // Prefer stable floor tracking as required; everything else optional.
+    const XR_FEATURES = {
+      requiredFeatures: ['local-floor'],
+      optionalFeatures: ['bounded-floor','hand-tracking','layers','anchors']
+    };
+
+    function onSessionStarted(session) {
+      xrSession = session;
+      renderer.xr.setSession(session);
+      if (controls) controls.enabled = false;   // HMD drives view
+      setBtnState({ text: 'Exit VR', active: true });
+
+      session.addEventListener('end', onSessionEnded);
+    }
+
+    function onSessionEnded() {
+      xrSession = null;
+      if (controls) controls.enabled = true;
+      setBtnState({ text: 'Enter VR', active: false });
+    }
+
+    async function enterXR() {
+      const mode = await getBestMode();
+      if (!mode) {
+        alert('WebXR not available.\n\nTips:\n• Serve over HTTPS (or localhost).\n• Use a WebXR-capable browser (Quest Browser / recent Chrome/Edge).\n• Headset must be awake/authorized.');
+        return;
+      }
+      try {
+        const session = await navigator.xr.requestSession(mode, XR_FEATURES);
+        onSessionStarted(session);
+      } catch (e) {
+        console.error('[WebXR] requestSession() failed:', e);
+        alert('Could not start XR session. See console for details.');
+      }
+    }
+
+    function exitXR() {
+      if (xrSession) xrSession.end().catch(()=>{});
+    }
+
+    // Button wiring (toggle)
+    vrBtn.addEventListener('click', () => {
+      if (xrSession) exitXR();
+      else enterXR();
+    });
+
+    // Initial availability state
+    (async () => {
+      if (!isSecure) {
+        setBtnState({ text: 'WebXR needs HTTPS', disabled: true, title: 'Serve over https:// or use localhost' });
+        return;
+      }
+      if (!hasXR) {
+        setBtnState({ text: 'WebXR unavailable', disabled: true, title: 'Browser lacks navigator.xr' });
+        return;
+      }
+      const mode = await getBestMode();
+      if (mode === 'immersive-vr') setBtnState({ text: 'Enter VR' });
+      else if (mode === 'immersive-ar') setBtnState({ text: 'Enter AR' });
+      else setBtnState({ text: 'WebXR unsupported', disabled: true });
+    })();
+
+    // Nicety: pause timeline when the tab hides (e.g., system dialogs on HMD)
+    document.addEventListener('visibilitychange', ()=>{
+      if (document.visibilityState === 'hidden' && Engine?.playing) Engine.pause?.();
+    });
+
+    // Cleanup for hot reloads
+    window.addEventListener('beforeunload', ()=>{ try { xrSession?.end(); } catch(_){} });
   }
 
-  function exitXR() {
-    if (xrSession) xrSession.end().catch(()=>{});
-  }
-
-  // Button wiring
-  vrBtn.addEventListener('click', () => {
-    if (xrSession) exitXR();
-    else enterXR();
-  });
-
-  // Initial availability state
-  (async () => {
-    if (!isSecure) {
-      setBtnState({ text: 'WebXR needs HTTPS', disabled: true });
-      return;
-    }
-    if (!hasXR) {
-      // Some browsers will polyfill, but we don’t ship one here—be explicit.
-      setBtnState({ text: 'WebXR unavailable', disabled: true });
-      return;
-    }
-    const mode = await getBestMode();
-    if (mode === 'immersive-vr') setBtnState({ text: 'Enter VR' });
-    else if (mode === 'immersive-ar') setBtnState({ text: 'Enter AR' });
-    else setBtnState({ text: 'WebXR unsupported', disabled: true });
-  })();
-
-  // Optional nicety: auto-pause your timeline when entering XR menus
-  // (Some headsets open system dialogs; we keep your Engine sane.)
-  document.addEventListener('visibilitychange', ()=>{
-    if (document.visibilityState === 'hidden' && Engine?.playing) {
-      Engine.pause?.();
-    }
-  });
-
-  // Cleanup in case of hot reloads
-  window.addEventListener('beforeunload', ()=>{ try { xrSession?.end(); } catch(_){} });
-}
+  // If renderer is already there, start now; otherwise wait for our event.
+  if (window?.renderer) start();
+  else window.addEventListener('ripper-ready', start, { once:true });
+})();
 </script>
+
 
 </body>
 </html>
