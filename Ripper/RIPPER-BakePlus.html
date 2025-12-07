@@ -4,7 +4,7 @@
 <script>
 // ---------- SSOT constants (single source of truth) ----------
 window.__WB_CONSTANTS__ = window.__WB_CONSTANTS__ || {
-  DEFAULT_FPS: 30,
+  DEFAULT_FPS: 60,
   WB_SPAWN_SCALE: 3,
   PATH_WIDTH_PX: 2
 };
@@ -59,9 +59,19 @@ window.__WB_CONSTANTS__ = window.__WB_CONSTANTS__ || {
     top:auto; bottom:14px; left:16px; right:auto;
     display:flex; flex-wrap:wrap; gap:8px; align-items:center;
   }
-  #seqHud > * { background:#131313; border:1px solid #333; color:#ddd; border-radius:8px; padding:6px 8px; font:12px ui-monospace,Menlo,monospace }
+  #seqHud > * { background:rgba(19,19,19,0.20); border:1px solid rgba(51,51,51,0.20); color:#ddd; border-radius:8px; padding:6px 8px; font:12px ui-monospace,Menlo,monospace }
   #seqHud label { background:transparent; border:none; padding:0; color:#9ad985 }
   #seqHud .soft { opacity:.8; }
+    
+  /* Flex line-break helper inside #seqHud */
+  #seqHud .flexBreak{
+    flex-basis:100%;
+    height:0;
+    padding:0 !important;
+    border:0 !important;
+    background:transparent !important;
+    box-shadow:none !important;
+  }
 
   #devToggles { display:flex; gap:8px; align-items:center; }
   #devToggles label { display:inline-flex; gap:6px; align-items:center; background:transparent; border:none; padding:0; color:#cfe8c7; }
@@ -74,7 +84,7 @@ window.__WB_CONSTANTS__ = window.__WB_CONSTANTS__ || {
 
   /* Workbench panel (left) */
   #wbPanel {
-    position:fixed; top:14px; left:16px; bottom:72px; width:320px; z-index:25;
+    position:fixed; top:14px; left:16px; bottom:150px; width:320px; z-index:25;
     background-color: rgba(16,16,16,0.30);
     border:1px solid #2a2a2a; border-radius:10px; padding:10px;
     display:none; overflow:auto;
@@ -92,17 +102,6 @@ window.__WB_CONSTANTS__ = window.__WB_CONSTANTS__ || {
   #wbPanel .vol .head .mini { display:flex; gap:6px; align-items:center; }
   .chip { display:inline-block; padding:2px 6px; border-radius:999px; border:1px solid #3a3a3a; font-size:11px; background:#0e0e0e; }
   .sep { height:1px; background:#222; margin:8px 0; }
-
-  #vrBtn {
-    cursor: pointer;
-    font-weight: 600;
-    border: 1px solid #2a2a2a;
-    background: #121212;
-    padding: 6px 10px;
-    border-radius: 8px;
-    }
-    #vrBtn[disabled] { opacity:.5; cursor:not-allowed; }
-
 
   /* Workbench axis view buttons (bottom-right, vertical) */
   #wbViews {
@@ -390,7 +389,6 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
 { "imports": {
     "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
     "OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js"
-    ,"BufferGeometryUtils": "https://unpkg.com/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js"
 }}
 </script>
 </head>
@@ -522,7 +520,9 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
 </div>
 
 <!-- Toolbar -->
+<!-- Toolbar -->
 <div id="seqHud" class="hud">
+  <!-- Line 1 (top): Mode + Faces -->
   <span id="modeWrap">
     <label>Mode</label>
     <select id="mode">
@@ -530,28 +530,6 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
       <option value="preview" selected>Preview</option>
       <option value="workbench">Workbench</option>
     </select>
-  </span>
-  <span id="wbSaveWrap">
-    <input id="wbName" type="text" placeholder="bake name (e.g. plane-cascade)"/>
-    <button id="wbBake">Bake Bench</button>
-  </span>
-
-
-  <!-- Ripp chooser (hidden in Dev, shown in Preview only) -->
-  <span id="seqWrap">
-    <label>Ripp</label>
-    <select id="sequence"></select>
-    <button id="loadSeq">Load</button>
-  </span>
-
-  <!-- Transport (shown in Preview & Workbench; hidden in Dev) -->
-  <span id="transportWrap">
-    <button id="play">Play</button>
-    <button id="pause">Pause</button>
-    <input id="scrub" type="range" min="0" max="12" step="0.01" value="0" style="width:180px"/>
-    <span class="soft">t=<span id="tVal">0.00</span>s</span>
-    <span class="soft">fps=<span id="fpsVal">30</span></span>
-    <button id="bake" title="Bake JSON (Preview only)">Bake JSON…</button>
   </span>
 
   <!-- Faces (Preview only: Front/Back/Both) -->
@@ -564,6 +542,40 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
     </select>
   </span>
 
+  <!-- hard line break -->
+  <span class="flexBreak" aria-hidden="true"></span>
+
+  <!-- Line 2: everything else -->
+  <span id="wbSaveWrap">
+    <input id="wbName" type="text" placeholder="bake name (e.g. plane-cascade)"/>
+    <button id="wbBake">Bake Bench</button>
+  </span>
+
+  <!-- Ripp chooser (hidden in Dev, shown in Preview only) -->
+  <span id="seqWrap">
+    <label>Ripp</label>
+    <select id="sequence"></select>
+    <button id="loadSeq">Load</button>
+  </span>
+
+  <!-- Transport (shown in Preview & Workbench; hidden in Dev) -->
+    <!-- UI -->
+  <span id="transportWrap">
+    <!--<<button id="play">Play</button>
+    button id="pause">Pause</button> -->
+    <button id="play" aria-pressed="false" title="Play">Play</button>
+    <input id="scrub" type="range" min="0" max="12" step="0.01" value="0" style="width:180px"/>
+    <span class="soft">t=<span id="tVal">0.00</span>s</span>
+    <span class="soft">fps=<span id="fpsVal"></span></span>
+    <input id="fpsInput" type="number" min="1" max="240" step="1" value="60" style="width:50px"/>
+    <span class="soft">speed%=</span>
+    <input id="speedPct" type="number" min="5" max="1000" step="1" value="100" style="width:50px"/>
+    <span class="soft">time start/stop=</span>
+    <input id="timeStart" type="number" min="0" max="59" step="1" value="0" style="width:50px"/>
+    <input id="timeEnd" type="number" min="1" max="60" step="1" value="0" style="width:50px"/>
+    <button id="bake" title="Bake JSON (Preview only)">Bake JSON…</button>
+  </span>
+
   <!-- Dev toggles (Dev only) -->
   <div id="devToggles">
     <label><input id="visT" type="checkbox" checked/> <span class="sw t"></span>T</label>
@@ -571,8 +583,6 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
     <label><input id="visL" type="checkbox" checked/> <span class="sw l"></span>L</label>
     <label><input id="visC" type="checkbox"/> Centroids</label>
   </div>
-  <button id="vrBtn" title="Enter VR" class="soft">Enter VR</button>
-  
 </div>
 
 <script type="module" id="fatline-imports">
@@ -582,13 +592,141 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
 
   // Expose to the global so your existing module can feature-detect later
   Object.assign(window, { Line2, LineMaterial, LineGeometry });
-  window.dispatchEvent(new Event('ripper-ready'));
 </script>
 
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'OrbitControls';
 import * as DOME from './dome.mesh.js'; // hardcoded baked mesh
+
+
+// ============================================================================
+// [PV] PREVIEW BAKE (NOT Workbench)
+// - Preview-only export wrapper to prevent conflation with Workbench bake.
+// ============================================================================
+
+function pvNowStamp() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}__${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function pvDownloadJSON(obj, filename) {
+  const json = JSON.stringify(obj, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 0);
+}
+
+function pvSafeClone(x) {
+  // avoids accidental live references in the exported bake
+  try { return structuredClone(x); } catch { return JSON.parse(JSON.stringify(x)); }
+}
+
+/** BAKE PREVIEW **/
+function pvGetBakePlan(){
+  const fps  = Math.max(1, Math.min(240, Math.floor(Engine.fps || DEFAULT_FPS)));
+  const rate = _playbackRate(); // Engine.speed
+
+  const durSim   = Number(Engine.getEffectiveDuration?.() ?? Engine.durationBase ?? 0) || 0;
+  const startSim = Math.max(0, Number(getTimeStart()) || 0);
+  const stopSim  = isStopFinite() ? Math.min(Number(getTimeStop()) || 0, durSim) : durSim;
+
+  const startReal = startSim / rate;
+  const stopReal  = stopSim  / rate;
+  const spanReal  = Math.max(0, stopReal - startReal);
+
+  // bake frames in REAL time at fps
+  const frames = Math.max(1, Math.floor(spanReal * fps + 1e-9) + 1);
+
+  // the one mapping that matters:
+  // realSeconds -> simSeconds -> evalSeconds (trim/loop aware)
+  const toEval = (tReal)=>{
+    const tSim = (Number(tReal) || 0) * rate;
+    return effectiveRippTimeSec(tSim);
+  };
+
+  return { fps, rate, durSim, startSim, stopSim, startReal, stopReal, frames, toEval };
+}
+
+
+function bakePreview(){
+  if (modeSel?.value !== 'preview'){
+    console.warn('[PV] Bake JSON is Preview-only.');
+    return;
+  }
+
+  _syncPreviewModeFlag(); // ensure trim logic is actually in preview mode
+
+  const plan = pvGetBakePlan();
+
+  // Freeze time while baking so Engine.tick() can't drift underneath us
+  const wasPlaying = !!Engine.playing;
+  Engine.pause();
+
+  try {
+    const core =
+      (typeof buildBakePayload === "function")
+        ? buildBakePayload({
+            mode: "preview",
+            // explicit bake settings
+            fps: plan.fps,
+            speed: plan.rate,
+            timeStartReal: plan.startReal,
+            timeStopReal: plan.stopReal,
+            timeStartSim: plan.startSim,
+            timeStopSim: plan.stopSim,
+            frames: plan.frames,
+            // the critical mapping:
+            toEval: plan.toEval,
+            // keep face mode aligned with Preview UI
+            faceMode: faceMode?.value || 'front',
+          })
+        : (typeof exportPreviewBakeCore === "function")
+          ? exportPreviewBakeCore({ bakePlan: plan })
+          : null;
+
+    if (!core){
+      console.warn("[PV] bakePreview(): No bake core found. Expected buildBakePayload(...) or exportPreviewBakeCore(...).");
+      return;
+    }
+
+    const payload = (core && typeof core === 'object' && core.schema)
+      ? core
+      : {
+          schema: "RIPPER-PREVIEW-BAKE/1.1.0",
+          bakeKind: "preview",
+          sourceMode: "preview",
+          createdAt: new Date().toISOString(),
+          settings: {
+            fps: plan.fps,
+            speed: plan.rate,
+            timeStartReal: plan.startReal,
+            timeStopReal: plan.stopReal,
+            timeStartSim: plan.startSim,
+            timeStopSim: plan.stopSim,
+            frames: plan.frames
+          },
+          data: pvSafeClone(core)
+        };
+
+    const fn = `ripper_preview_bake__${pvNowStamp()}.json`;
+    pvDownloadJSON(payload, fn);
+    console.log(`[PV] Preview bake exported: ${fn}`, payload);
+
+  } finally {
+    if (wasPlaying) Engine.play();
+  }
+}
+
+
 
 /* ---------- DOM ---------- */
 const app = document.getElementById('app');
@@ -604,11 +742,515 @@ const devToggles = document.getElementById('devToggles');
 const seqSel = document.getElementById('sequence');
 const loadBtn = document.getElementById('loadSeq');
 const playBtn = document.getElementById('play');
-const pauseBtn = document.getElementById('pause');
+
+function syncPlayToggleUI(){
+  if (!playBtn) return;
+  const isPlaying = !!Engine.playing;
+  playBtn.textContent = isPlaying ? 'Pause' : 'Play';
+  playBtn.title = isPlaying ? 'Pause' : 'Play';
+  playBtn.setAttribute('aria-pressed', isPlaying ? 'true' : 'false');
+}
+
 const scrub = document.getElementById('scrub');
 const tVal = document.getElementById('tVal');
-const fpsVal = document.getElementById('fpsVal');
+
+const timeStartInput = document.getElementById('timeStart');
+const timeEndInput   = document.getElementById('timeEnd');
+const timeStopInput = timeEndInput;
+
+
+/* ---------- ENGINE ---------- */
+const DEFAULT_FPS = window.__WB_CONSTANTS__?.DEFAULT_FPS ?? 60;
+
+let MASTER_SPEED_DEFAULT = 1; // 1 = 100%
+
+const Engine = globalThis.Engine = globalThis.Engine ?? {
+  fps: DEFAULT_FPS,
+  playing: false,
+  t: 0,
+  durationBase: 12,
+  lastReal: 0,
+  speed: MASTER_SPEED_DEFAULT,
+
+  _lastStepIndex: -1,
+  userFpsOverride: false,
+
+  getEffectiveDuration(){
+    return this.durationBase;  
+  },
+  getEffectiveTime(){
+    return this.t;      
+  },
+  setEffectiveTime(tEff){
+    this.t = (Number(tEff) || 0);  
+  },
+
+  syncTransportUI(){
+  const rate = _playbackRate();
+  const tEffSim = this.getEffectiveTime();
+  const dEffSim = this.getEffectiveDuration();
+
+  const inPreview = (modeSel.value === 'preview');
+
+  const minSim = inPreview ? getTimeStart() : 0;
+  const maxSim = inPreview
+    ? (isStopFinite() ? Math.min(getTimeStop(), dEffSim) : dEffSim)
+    : dEffSim;
+
+  // sim-time the ripp sees
+  const tShownSim = inPreview ? effectiveRippTimeSec(tEffSim) : tEffSim;
+
+  // UI is REAL time
+  const minUI = inPreview ? (minSim / rate) : minSim;
+  const maxUI = inPreview ? (maxSim / rate) : maxSim;
+  const tUI   = inPreview ? (tShownSim / rate) : tShownSim;
+
+  scrub.min = String(minUI);
+  scrub.max = String(Math.max(minUI, maxUI));
+  scrub.value = String(Math.min(Math.max(tUI, minUI), maxUI));
+
+  tVal.textContent = tUI.toFixed(2);
+
+  // keep trim inputs showing REAL seconds (but don't fight the user while typing)
+  if (inPreview){
+    if (timeStartInput && document.activeElement !== timeStartInput){
+      timeStartInput.value = getTimeStartUIValue();
+    }
+    if (timeStopInput && document.activeElement !== timeStopInput){
+      timeStopInput.value = getTimeStopUIValue();
+    }
+  }
+},
+
+
+  setDuration(d){
+    this.durationBase = Math.max(0, Number(d) || 0);
+    this.duration = this.durationBase; // legacy compat
+    this.syncTransportUI();
+  },
+
+  play(){
+  this.playing = true;
+  this.lastReal = performance.now() / 1000;
+  const fps = (this.fps || DEFAULT_FPS);
+  this._lastStepIndex = Math.floor(this.getEffectiveTime() * fps);
+  syncPlayToggleUI();
+  },
+  pause(){
+    this.playing = false;
+    syncPlayToggleUI();
+  },
+
+
+  tick(){
+  _syncPreviewModeFlag();
+  const now = performance.now() * 0.001;
+
+  // Real dt (clamped) — safe if lastReal is undefined/NaN
+  let dtReal = now - this.lastReal;
+  if (!Number.isFinite(dtReal) || dtReal < 0) dtReal = 0;
+  dtReal = Math.min(dtReal, 0.25);
+
+  // Always update lastReal so pauses/tab-inactive don't accumulate a huge dt on resume
+  this.lastReal = now;
+
+  if (!this.playing) return;
+
+  // Advance transport time safely
+  const speed = Number.isFinite(this.speed) ? this.speed : 1;
+  if (!Number.isFinite(this.t)) this.t = 0;
+  this.t += dtReal * speed;
+
+  this.syncTransportUI();
+
+  // Only drive ripps in Preview (not Workbench)
+  if (modeSel.value !== 'preview') return;
+
+  const fps = Math.max(1, Math.min(240, Math.floor(this.fps || DEFAULT_FPS)));
+  const tEffNow = this.getEffectiveTime();
+  if (!Number.isFinite(tEffNow)) return;
+
+  const targetStepIndex = Math.floor(tEffNow * fps + 1e-9);
+
+  const loopOn = isLoopActive();
+  const spanSec = loopOn ? Math.max(0, Number(getTrimSpan()) || 0) : 0;
+  const spanSteps = (loopOn && spanSec > 0) ? Math.max(1, Math.round(spanSec * fps)) : 0;
+
+  // Init/reset path
+  if (!Number.isFinite(this._lastStepIndex) || this._lastStepIndex == null || this._lastStepIndex < 0){
+    this._lastStepIndex = targetStepIndex;
+
+    const tEval0 = effectiveRippTimeSec(tEffNow);
+    SequenceManager._lastEvalT = tEval0;
+    SequenceManager.update(tEval0, 0);
+
+
+    applyPreviewColors();
+    return;
+  }
+
+  let lastStepIndex = this._lastStepIndex;
+  let deltaSteps = targetStepIndex - lastStepIndex;
+
+  // Continuous eval time (lets ripps interpolate smoothly)
+  const tEvalNow = effectiveRippTimeSec(tEffNow);
+
+  // dt in *eval time* should match “speed-scaled real dt”
+  let dtEvalNow = dtReal * speed;
+
+  // If you’re looping/trim-wrapping, keep dt positive across the wrap
+  const prevEval = SequenceManager._lastEvalT;
+  if (typeof prevEval === 'number') {
+    dtEvalNow = tEvalNow - prevEval;
+    if (loopOn && spanSec > 0 && dtEvalNow < 0) dtEvalNow += spanSec;
+  }
+
+  // If we did NOT cross a discrete frame boundary, still update once per RAF.
+  // This is the key change that removes “slow speed = choppy”
+  if (deltaSteps === 0) {
+    SequenceManager._lastEvalT = tEvalNow;
+    SequenceManager.update(tEvalNow, dtEvalNow);
+    applyPreviewColors();
+    return;
+  }
+
+
+  // If the effective grid wrapped, convert to a forward step count
+  if (deltaSteps < 0){
+    if (loopOn && spanSteps > 0){
+      deltaSteps += spanSteps;
+    } else {
+      // Backward jump without loop => discontinuity (seek/reset). Snap with dt=0.
+      this._lastStepIndex = targetStepIndex;
+
+      const tEval = effectiveRippTimeSec(targetStepIndex / fps);
+      SequenceManager._lastEvalT = tEval;
+
+      SequenceManager.update(tEval, 0);
+      applyPreviewColors();
+      return;
+    }
+  }
+
+  // Cap catch-up to avoid spiral-of-death (e.g. tab inactive)
+  const MAX_CATCH_UP_STEPS = Math.min(240, Math.max(1, fps)); // ~1 second
+  if (deltaSteps > MAX_CATCH_UP_STEPS){
+    this._lastStepIndex = targetStepIndex;
+
+    const tEval = effectiveRippTimeSec(targetStepIndex / fps);
+    SequenceManager._lastEvalT = tEval;
+
+    SequenceManager.update(tEval, 0);
+    applyPreviewColors();
+    return;
+  }
+
+  const dtSnapEff = 1 / fps;
+
+  // Deterministically step through EACH missed effective grid step
+  for (let i = 1; i <= deltaSteps; i++){
+    let stepIndex = lastStepIndex + i;
+
+    // Keep the stored stepIndex in-loop if looping (so next delta calc stays sane)
+    if (loopOn && spanSteps > 0){
+      stepIndex = stepIndex % spanSteps;
+    }
+
+    const tSnapEff = stepIndex / fps;
+
+    // Apply trim/loop mapping to the time sent to the ripp
+    const tEval = effectiveRippTimeSec(tSnapEff);
+
+    // dt that stays “forward” even when eval time wraps
+    let dtEval = dtSnapEff;
+    const prevEval = SequenceManager._lastEvalT;
+
+    if (typeof prevEval === 'number'){
+      dtEval = tEval - prevEval;
+      if (loopOn && spanSec > 0 && dtEval < 0) dtEval += spanSec;
+    }
+
+    SequenceManager._lastEvalT = tEval;
+    SequenceManager.update(tEval, dtEval);
+  }
+
+  this._lastStepIndex = targetStepIndex;
+  applyPreviewColors();
+}
+
+};
+
+
+/* ---------- TRIM / LOOP WINDOW ---------- */
+
+let timeStart = 0;          // seconds
+let timeStop = null;        // null => ∞ (preferred over Infinity for UI/input)
+
+// If you already have a preview flag elsewhere, delete this and use yours.
+let isPreviewMode = false;
+
+function _syncPreviewModeFlag(){
+  isPreviewMode = (modeSel?.value === 'preview');
+}
+_syncPreviewModeFlag();
+modeSel?.addEventListener('change', _syncPreviewModeFlag);
+
+
+// --- getters
+function getTimeStart() {
+  return timeStart;
+}
+function getTimeStop() {
+  return timeStop == null ? Infinity : timeStop;
+}
+function isStopFinite() {
+  return Number.isFinite(getTimeStop());
+}
+function getTrimSpan() {
+  const start = getTimeStart();
+  const stop = getTimeStop();
+  return Number.isFinite(stop) ? Math.max(0, stop - start) : Infinity;
+}
+function isLoopActive() {
+  return !!isPreviewMode && isStopFinite() && getTrimSpan() > 0;
+}
+
+// --- setters (core)
+function setTimeStartSec(v) {
+  const n = Number(v);
+  timeStart = Number.isFinite(n) ? Math.max(0, n) : 0;
+
+  // Keep ordering sane if stop is finite and now below start
+  if (timeStop != null && timeStop < timeStart) timeStop = timeStart;
+}
+
+function setTimeStopSec(v) {
+  // Accept null/undefined/"" => ∞
+  if (v == null || v === "") {
+    timeStop = null;
+    return;
+  }
+  const n = Number(v);
+  timeStop = Number.isFinite(n) ? Math.max(timeStart, n) : null;
+}
+
+// --- UI-friendly helpers
+function getTimeStartUIValue() {
+  return _fmtUI(_simToReal(getTimeStart()));
+}
+
+function getTimeStopUIValue() {
+  const stop = getTimeStop();
+  return Number.isFinite(stop) ? _fmtUI(_simToReal(stop)) : "";
+}
+
+
+// Map “global time” -> “time used to evaluate the ripp”
+function effectiveRippTimeSec(tSec) {
+  const t = Number(tSec);
+  const start = getTimeStart();
+  const stop = getTimeStop();
+
+  // Always clamp to start at minimum:
+  const unclamped = Number.isFinite(t) ? t : 0;
+  const base = Math.max(start, unclamped);
+
+  // No looping if not preview, or if stop is ∞
+  if (!isPreviewMode || !Number.isFinite(stop)) return base;
+
+  const span = Math.max(0, stop - start);
+  if (span <= 0) return start;
+
+  // wrap into [start, stop)
+  const wrapped = ((base - start) % span + span) % span;
+  return start + wrapped;
+}
+
+// Call this whenever a new ripp is loaded
+function resetTrimWindowForNewRipp() {
+  timeStart = 0;
+  timeStop = null; // ∞
+}
+
+function _reEvalPreviewNow(){
+  if (modeSel.value !== 'preview') return;
+  if (!SequenceManager.current) return;
+
+  const tEff = Engine.getEffectiveTime();
+  const tEval = effectiveRippTimeSec(tEff);
+
+  SequenceManager._lastEvalT = tEval;
+  SequenceManager.current.update?.(SceneAPI, tEval, 0);
+  applyPreviewColors();
+  Engine.syncTransportUI();
+}
+
+// Trim inputs (UI is REAL seconds; internal is SIM seconds)
+timeStartInput?.addEventListener('input', ()=>{
+  const uiReal = _parseUI(timeStartInput.value);
+  setTimeStartSec(_realToSim(uiReal));
+
+  // snap engine time up to start (SIM) to avoid “stuck at start”
+  const minSim = getTimeStart();
+  if (Engine.getEffectiveTime() < minSim) Engine.setEffectiveTime(minSim);
+
+  _reEvalPreviewNow();
+});
+
+timeStopInput?.addEventListener('input', ()=>{
+  const raw = String(timeStopInput.value ?? "").trim();
+  const n = Number(raw);
+
+  // Treat empty OR non-positive as "no stop" (∞)
+  if (raw === "" || (!Number.isNaN(n) && n <= 0)){
+    setTimeStopSec(""); // ∞
+  } else {
+    setTimeStopSec(_realToSim(_parseUI(raw)));
+  }
+
+  _reEvalPreviewNow();
+});
+
+
+
+// Scrub: scrub value is in REAL seconds (convert to SIM)
+scrub?.addEventListener('input', ()=>{
+  const tReal = Number(scrub.value) || 0;
+  Engine.setEffectiveTime(_realToSim(tReal));
+  Engine.pause(); // optional
+  _reEvalPreviewNow();
+});
+
+
+function _playbackRate(){
+  const r = Number(Engine?.speed);
+  return (Number.isFinite(r) && r > 0) ? r : 1;
+}
+function _simToReal(s){ return (Number(s) || 0) / _playbackRate(); }
+function _realToSim(r){ return (Number(r) || 0) * _playbackRate(); }
+
+// nice compact numeric string (no trailing zeros)
+function _fmtUI(sec){
+  const n = Number(sec);
+  if (!Number.isFinite(n)) return "0";
+  return String(+n.toFixed(6)); // + trims trailing zeros
+}
+function _parseUI(v){
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+
+
+/* ---------- FPS ---------- */
+// Set FPS Functions
+const fpsInput = document.getElementById('fpsInput');
+const fpsVal   = document.getElementById('fpsVal'); // <- important
+
+function _clampInt(n, lo, hi){
+  n = Math.floor(Number(n));
+  if (!Number.isFinite(n)) return lo;
+  return Math.min(hi, Math.max(lo, n));
+}
+
+function setFPS(next, { silent=false } = {}){
+  const defaultFps = window.__WB_CONSTANTS__?.DEFAULT_FPS ?? 60;
+  const current = Number(Engine.fps);
+  const fps = _clampInt(next ?? (Number.isFinite(current) ? current : defaultFps), 1, 240);
+
+  Engine.userFpsOverride = true;
+  Engine.fps = fps;
+  Engine._lastStepIndex = Math.floor(Engine.getEffectiveTime() * fps);
+
+  if (fpsVal) fpsVal.textContent = String(fps);
+  if (fpsInput) fpsInput.value = String(fps);
+
+  if (globalThis.SequenceManager?.meta) globalThis.SequenceManager.meta.fps = fps;
+
+  if (!silent){
+    try { localStorage.setItem('ripper_fps', String(fps)); } catch(e){}
+  }
+}
+
+// boot: restore saved FPS (or default)
+try {
+  const saved = Number(localStorage.getItem('ripper_fps'));
+  setFPS(Number.isFinite(saved) ? saved : (window.__WB_CONSTANTS__?.DEFAULT_FPS ?? 60), { silent:true });
+} catch(e){
+  setFPS(globalThis.DEFAULT_FPS, { silent:true });
+}
+
+// UI events
+fpsInput?.addEventListener('input',  ()=> setFPS(fpsInput.value, { silent:true }));
+fpsInput?.addEventListener('change', ()=> setFPS(fpsInput.value));
+fpsInput?.addEventListener('blur',   ()=> setFPS(fpsInput.value));
+fpsInput?.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter'){ setFPS(fpsInput.value); fpsInput.blur(); }
+});
+
+
+/* ---------- SPEED  ---------- */
+const speedVal = document.getElementById('speedVal');
+const speed    = document.getElementById('speed');     // hidden range (multiplier)
+const speedPct = document.getElementById('speedPct');  // visible percent input
+
+function clamp(n, lo, hi){ return Math.min(hi, Math.max(lo, n)); }
+
+function setSpeedPct(pct, { silent=false } = {}){
+  const p = clamp(Number(pct) || 100, 5, 1000);
+  const mult = p / 100;
+
+  // UI
+  if (speedPct) speedPct.value = String(Math.round(p));
+  if (speedVal) speedVal.textContent = `${Math.round(p)}%`;
+
+  // keep existing internal behavior alive:
+  // anything reading #speed.value still gets multiplier (0.25..4)
+  if (speed) speed.value = String(mult);
+
+  if (!silent && speed){
+    // trigger any existing listeners you already have on the old slider
+    speed.dispatchEvent(new Event('input', { bubbles:true }));
+    speed.dispatchEvent(new Event('change', { bubbles:true }));
+  }
+}
+
+// default to 100% on boot
+setSpeedPct(100, { silent:true });
+
+function previewSpeedPct(raw){
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return;
+  const p = clamp(n, 25, 1000);
+  const mult = p / 100;
+
+  if (speedVal) speedVal.textContent = `${Math.round(p)}%`;
+  Engine.speed = mult;
+  Engine.syncTransportUI();
+
+}
+
+function commitSpeedPct(){
+  const pct  = clamp(Number(speedPct.value) || 100, 5, 1000);
+  setSpeedPct(pct);                 // keeps UI consistent
+  const mult = pct / 100;
+
+  MASTER_SPEED_DEFAULT = mult;      // if you want a “default” variable
+  Engine.speed = mult;              // <-- this is what actually affects playback
+  Engine.syncTransportUI();
+}
+
+speedPct?.addEventListener('input', () => previewSpeedPct(speedPct.value));
+speedPct?.addEventListener('change', commitSpeedPct);
+speedPct?.addEventListener('blur', commitSpeedPct);
+speedPct?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { commitSpeedPct(); speedPct.blur(); }
+});
+
+
 const bakeBtn = document.getElementById('bake');
+
+
 const faceMode = document.getElementById('faceMode');
 
 const visT = document.getElementById('visT');
@@ -2438,7 +3080,6 @@ if (wbEditorReset) wbEditorReset.addEventListener('click', ()=>{
   if(!wbEditing) return;
   const rec = wbEditing;
     if (rec.type === 'curve' && obj?.userData?.workbench?.params){
-    const obj = rec.mesh;
     const lift = 0.001;
     const r  = (SceneAPI?.info?.radius ?? (typeof getDomeRadiusFallback==='function' ? getDomeRadiusFallback(5) : 5));
     const L  = r;
@@ -3160,7 +3801,6 @@ function refreshWBList(){
 }
 
 
-
 /** Reflect camera across controls.target (switch +axis <-> -axis). */
 function flipCameraAcrossTarget(){
   if (!controls || !camera) return;
@@ -3212,13 +3852,8 @@ function applyWorkbenchScale(_isWB){
   if (domeRoot) domeRoot.scale.setScalar(1.0);
 }
 
-
-
 /* ---------- constants ---------- */
 const START_AZ = Math.PI, START_POLAR = Math.PI/2;
-const DEFAULT_FPS = 30;
-
-
 
 /* ---------- sRGB export helpers ---------- */
 const clamp01 = (x)=> x<0?0:x>1?1:x;
@@ -3274,25 +3909,6 @@ let domeMeta=null, panelBoxes=[];
 let lastPanelId=null;
 const _v = new THREE.Vector3();
 
-/* ---------- engine ---------- */
-const Engine = {
-  fps: DEFAULT_FPS, playing:false, t:0, duration:12, lastReal:0,
-  setDuration(d){ this.duration=Math.max(0,d); scrub.max=String(this.duration); },
-  play(){ this.playing=true; this.lastReal=performance.now()/1000; },
-  pause(){ this.playing=false; },
-  tick(){
-    const now=performance.now()/1000;
-    if(this.playing){
-      const dt=now-this.lastReal; this.t+=dt;
-      tVal.textContent=this.t.toFixed(2); scrub.value=String(Math.min(this.t,this.duration));
-      if (modeSel.value!=='dev') {
-        SequenceManager.update(this.t,dt);
-        applyPreviewColors();
-      }
-    }
-    this.lastReal=now;
-  }
-};
 
 /* ---------- SceneAPI ---------- */
 const SceneAPI = {
@@ -3317,6 +3933,7 @@ const SceneAPI = {
 /* ---------- Sequences ---------- */
 const SequenceManager = {
   current:null, meta:null, list:[],
+  _lastRawT: 0, // track raw time so we can compute dt across wrap
   async discover(){
     this.list.length=0;
     try{
@@ -3330,14 +3947,36 @@ const SequenceManager = {
     if(!id){ alert('Pick a ripp first.'); return; }
     try{
       if (this.current?.dispose) this.current.dispose(SceneAPI);
+
+      resetTrimWindowForNewRipp();
+      this._lastRawT = 0;
+
+      // OPTIONAL if you have inputs:
+      if (timeStartInput) timeStartInput.value = String(getTimeStart()); // "0"
+      if (timeStopInput)  timeStopInput.value  = getTimeStopUIValue();  // ""
+
       const mod = await import(`./Ripps/${id}.js`);
       this.current = mod;
       this.meta = mod.meta || { fps: DEFAULT_FPS, duration: 12, id };
-      Engine.fps = this.meta.fps || DEFAULT_FPS; fpsVal.textContent=String(Engine.fps);
+      Engine.fps = this.meta.fps || DEFAULT_FPS;
+
+      this.meta = mod.meta || { fps: DEFAULT_FPS, duration: 12, id };
+      // Respect user override if they touched the FPS input
+      const desiredFps = Engine.userFpsOverride
+        ? (Engine.fps || DEFAULT_FPS)
+        : (this.meta.fps || DEFAULT_FPS);
+
+      Engine.fps = desiredFps;
+      this.meta.fps = desiredFps; // keep meta in sync with what we’re actually using
+
+      if (fpsVal) fpsVal.textContent = String(desiredFps);
+      if (fpsInput) fpsInput.value = String(desiredFps);
+
+      fpsVal.textContent=String(Engine.fps);
       if (this.meta.duration != null) Engine.setDuration(this.meta.duration);
       SceneAPI.resetColorsTo([1,1,1,1]);
       mod.init?.(SceneAPI);
-      mod.update?.(SceneAPI, 0, 0);
+      mod.update?.(SceneAPI, effectiveRippTimeSec(0), 0);
       applyPreviewColors();
       tVal.textContent='0.00'; Engine.t=0; scrub.value='0';
     }catch(err){
@@ -3361,55 +4000,252 @@ function toExportRGBA(id, rgba){
   const a = SceneAPI._explicitAlpha.has(id) ? clamp01(rgba[3]) : 1.0;
   return [ quantize(rgb_srgb[0]), quantize(rgb_srgb[1]), quantize(rgb_srgb[2]), quantize(a) ];
 }
+
+
+
+/* --------------BAKE JSON ---------------------*/
 async function bakeToJSON(){
-  if (modeSel.value!=='preview'){ alert('Bake JSON is only available in Preview mode.'); return; }
-  const duration = Number(prompt('Bake duration (seconds):', String(SequenceManager.meta?.duration ?? Engine.duration ?? 12)));
-  if (!isFinite(duration) || duration <= 0) { alert('Invalid duration'); return; }
-  const fps = parseInt(SequenceManager.meta?.fps || Engine.fps || DEFAULT_FPS, 10) || DEFAULT_FPS;
-
-  SequenceManager.current?.init?.(SceneAPI);
-
-  const lastFrame = Math.round(duration * fps);
-  const events = [];
-  for (let frame=0; frame<=lastFrame; frame++){
-    const t = frame / fps, dt = 1 / fps;
-    SequenceManager.current?.update?.(SceneAPI, t, dt);
-    const set = {};
-    for (const p of domeMeta.panels){
-      const rgba = (SceneAPI._rgbaById.get(p.id) || [1,1,1,1]).slice(0,4);
-      set[p.id] = { rgba: toExportRGBA(p.id, rgba), space:'srgb' };
-    }
-    events.push({ t:+t.toFixed(6), set });
+  if (modeSel.value !== 'preview'){
+    alert('Bake JSON is only available in Preview mode.');
+    return;
   }
 
-  const payload = { fps, events };
-  const json = JSON.stringify(payload);
-  const defaultName = `Baked_${SequenceManager.meta?.id || 'sequence'}_${fps}fps_${duration}s.json`;
+  // Duration stays derived (no duration prompt)
+  const duration = Number(SequenceManager.meta?.duration ?? Engine.duration ?? 12);
+  if (!isFinite(duration) || duration <= 0){
+    alert('Invalid duration (meta/engine).');
+    return;
+  }
+
+  const fps = parseInt(SequenceManager.meta?.fps || Engine.fps || DEFAULT_FPS, 10) || DEFAULT_FPS;
+
+  // ---- Playback rate: match Preview speed multiplier as closely as possible ----
+  const PB = window.PV?.state?.playback;
+  const playbackRateRaw = PB?.speedMult ?? PB?.speed ?? PB?.mult ?? (PB?.speedPct ? (PB.speedPct / 100) : undefined);
+
+  let playbackRate = Number(playbackRateRaw);
+  if (!isFinite(playbackRate) || playbackRate <= 0){
+    playbackRate = Number(Engine.speed);
+    if (!isFinite(playbackRate) || playbackRate <= 0) playbackRate = 1;
+  }
+
+  // ---- Sampling controls ----
+  const FRAME_STEP = 4;
+  const COLOR_EPS = 1 / 255;
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const safeBase = (s) => String(s ?? 'ripp')
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/[\\/:*?"<>|]+/g, '_')
+    .replace(/_+/g, '_');
+
+  // Reset ripp to a clean state
+  SequenceManager.current?.init?.(SceneAPI);
+
+  const panels = domeMeta?.panels || [];
+  if (!SequenceManager.current || panels.length === 0){
+    alert('No ripp loaded or domeMeta.panels is empty.');
+    return;
+  }
+
+  // ---- Preview trim window ----
+  const startRaw = Number(getTimeStart?.() ?? 0);
+  const stopFinite = Boolean(isStopFinite?.());
+  const stopRaw = stopFinite ? Number(getTimeStop?.()) : null;
+
+  const startSec = isFinite(startRaw) ? clamp(startRaw, 0, duration) : 0;
+
+  let stopSec = null;
+  if (stopFinite){
+    if (!isFinite(stopRaw)){
+      alert('Invalid timeStop');
+      return;
+    }
+    stopSec = clamp(stopRaw, 0, duration);
+    if (stopSec <= startSec){
+      alert(`Invalid trim window: timeStop (${stopSec}) must be > timeStart (${startSec}).`);
+      return;
+    }
+  }
+
+  const evalStart = stopFinite ? startSec : 0;
+  const evalEnd   = stopFinite ? stopSec   : duration;
+
+  const bakedSpanSec = Math.max(0, evalEnd - evalStart);   // simulated span
+  const bakedWallSpanSec = bakedSpanSec / playbackRate;    // exported (wall) span after speed
+
+  // -------- file name prompt (repurposed dialog) --------
+  const rippName = safeBase(
+    SequenceManager.meta?.name ||
+    SequenceManager.meta?.id   ||
+    seqSel?.value              ||
+    'ripp'
+  );
+
+  // seconds: pretty float (e.g. 2.5 instead of 2.500)
+  const fmtFloat = (n, decimals = 3) => {
+    const s = Number(n).toFixed(decimals);
+    return s.replace(/\.?0+$/, ''); // strip trailing zeros + trailing dot
+  };
+
+  const secondsTag = fmtFloat(bakedWallSpanSec, 3);          // "2.5"
+  const speedPctTag = `${Math.round(playbackRate * 100)}%`;  // "100%"
+
+  const suggestedName = `${rippName}-${secondsTag}-${speedPctTag}.json`;
+
+  const nameIn = prompt('Bake file name:', suggestedName);
+  if (nameIn === null) return;
+
+  let fileName = nameIn.trim() || suggestedName;
+  if (!/\.json$/i.test(fileName)) fileName += '.json';
+
+
+  // Use ceil so we don't accidentally miss the end; we clamp eval time anyway.
+  const lastFrame = Math.ceil(bakedWallSpanSec * fps);
+
+  const events = [];
+  const lastColors = new Map(); // id -> [r,g,b,a] linear
+
+  const readRGBA = (id) => {
+    const src = (SceneAPI._rgbaById.get(id) || [1, 1, 1, 1]);
+    const r = (src[0] ?? 1);
+    const g = (src[1] ?? 1);
+    const b = (src[2] ?? 1);
+    const a = (src[3] ?? 1);
+    return [r, g, b, a];
+  };
+
+  const pushEvent = (t, set) => {
+    if (!set || Object.keys(set).length === 0) return;
+    events.push({ t: +t.toFixed(6), set });
+  };
+
+  // ---- Initial full sample at exported tOut=0 (evaluated at evalStart) ----
+  SequenceManager.current.update?.(SceneAPI, evalStart, 0);
+
+  const set0 = {};
+  for (const p of panels){
+    const rgba = readRGBA(p.id);
+    lastColors.set(p.id, rgba);
+    set0[p.id] = { rgba: toExportRGBA(p.id, rgba), space: 'srgb' };
+  }
+  events.push({ t: 0, set: set0 });
+
+  // ---- Stepped sampling (WALL sampling, SIM evaluation) ----
+  let prevEvalT = evalStart;
+
+  for (let frame = FRAME_STEP; frame <= lastFrame; frame += FRAME_STEP){
+    const wallT = frame / fps;                      // exported timeline (seconds)
+    const tEval = evalStart + wallT * playbackRate; // simulated evaluation time
+    const tEvalClamped = Math.min(tEval, evalEnd);
+
+    const dtEval = tEvalClamped - prevEvalT;
+    prevEvalT = tEvalClamped;
+
+    SequenceManager.current.update?.(SceneAPI, tEvalClamped, dtEval);
+
+    const set = {};
+    let changedAny = false;
+
+    for (const p of panels){
+      const rgba = readRGBA(p.id);
+      const prev = lastColors.get(p.id);
+
+      const changed = !prev
+        || Math.abs(rgba[0] - prev[0]) > COLOR_EPS
+        || Math.abs(rgba[1] - prev[1]) > COLOR_EPS
+        || Math.abs(rgba[2] - prev[2]) > COLOR_EPS
+        || Math.abs(rgba[3] - prev[3]) > COLOR_EPS;
+
+      if (changed){
+        lastColors.set(p.id, rgba);
+        set[p.id] = { rgba: toExportRGBA(p.id, rgba), space: 'srgb' };
+        changedAny = true;
+      }
+    }
+
+    if (changedAny){
+      pushEvent(wallT, set);
+    }
+
+    if (tEvalClamped >= evalEnd) break;
+  }
+
+  // ---- Force one last eval exactly at evalEnd ----
+  if (prevEvalT < evalEnd){
+    const dtEval = evalEnd - prevEvalT;
+    prevEvalT = evalEnd;
+
+    SequenceManager.current.update?.(SceneAPI, evalEnd, dtEval);
+
+    const set = {};
+    let changedAny = false;
+
+    for (const p of panels){
+      const rgba = readRGBA(p.id);
+      const prev = lastColors.get(p.id);
+
+      const changed = !prev
+        || Math.abs(rgba[0] - prev[0]) > COLOR_EPS
+        || Math.abs(rgba[1] - prev[1]) > COLOR_EPS
+        || Math.abs(rgba[2] - prev[2]) > COLOR_EPS
+        || Math.abs(rgba[3] - prev[3]) > COLOR_EPS;
+
+      if (changed){
+        lastColors.set(p.id, rgba);
+        set[p.id] = { rgba: toExportRGBA(p.id, rgba), space: 'srgb' };
+        changedAny = true;
+      }
+    }
+
+    if (changedAny){
+      pushEvent(bakedWallSpanSec, set);
+    }
+  }
+
+  // ---- Build payload + save ----
+  const payload = {
+    fps,
+    playbackRate,
+    duration: +bakedWallSpanSec.toFixed(6),
+    trimWindow: { startSec, stopSec },
+    events
+  };
+
+  const json = JSON.stringify(payload, null, 2);
 
   try{
     if ('showSaveFilePicker' in window){
       const handle = await window.showSaveFilePicker({
-        suggestedName: defaultName,
+        suggestedName: fileName,
         types: [{ description:'JSON', accept:{'application/json':['.json']} }],
       });
       const w = await handle.createWritable();
       await w.write(new Blob([json], {type:'application/json'}));
       await w.close();
-      alert(`Baked → ${defaultName}`);
+      alert(`Baked → ${fileName}`);
       return;
     }
-  }catch(e){ console.warn('Picker failed; fallback download.', e); }
+  }catch(e){
+    console.warn('Picker failed; fallback download.', e);
+  }
 
+  // Fallback download
   const blob = new Blob([json], {type:'application/json'});
   const url = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement('a'), { href:url, download:defaultName });
+  const a = Object.assign(document.createElement('a'), { href:url, download:fileName });
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 500);
+
+  console.log(`[Ripper] Bake JSON OK: fps=${fps}, playbackRate=${playbackRate}, duration=${payload.duration}s, events=${events.length}`);
 }
+
 
 /* ---------- Modes ---------- */
 function setMode(m){
   const isPreview = (m==='preview');
+  isPreviewMode = isPreview;
   const isDev = (m==='dev');
   const isWB = (m==='workbench');
 
@@ -3802,11 +4638,23 @@ faceMode.addEventListener('change', ()=>{ applyFaceMode(); });
 
 seqSel.addEventListener('change', ()=> SequenceManager.loadById(seqSel.value));
 loadBtn.addEventListener('click', ()=> SequenceManager.loadById(seqSel.value));
-playBtn.addEventListener('click', ()=> Engine.play());
-pauseBtn.addEventListener('click', ()=> Engine.pause());
-scrub.addEventListener('input', ()=>{ Engine.t=Number(scrub.value)||0; tVal.textContent=Engine.t.toFixed(2); 
-  SequenceManager.update(Engine.t,0); if(modeSel.value!=='dev') applyPreviewColors(); 
+//playBtn.addEventListener('click', ()=> Engine.play());
+playBtn?.addEventListener('click', ()=>{
+  if (Engine.playing) Engine.pause();
+  else Engine.play();
+  Engine.syncTransportUI();
+  syncPlayToggleUI();
 });
+//pauseBtn.addEventListener('click', ()=> Engine.pause());
+scrub.addEventListener('input', ()=>{
+  const tEff = Number(scrub.value) || 0;
+  Engine.setEffectiveTime(tEff);      // maps UI time -> internal time
+  Engine.syncTransportUI();           // keeps text + clamp consistent
+
+  SequenceManager.update(Engine.t, 0);
+  if (modeSel.value !== 'dev') applyPreviewColors();
+});
+
 bakeBtn.addEventListener('click', bakeToJSON);
 
 /* Workbench axis buttons */
@@ -3832,9 +4680,8 @@ function init(){
   applyFaceMode();
 }
 init();
-Object.assign(window, { renderer, scene, camera, controls, Engine });
-window.dispatchEvent(new Event('ripper-ready'));
 window.refreshWBList = refreshWBList;
+
 window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
 </script>
 </div>
@@ -3911,268 +4758,5 @@ window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
   else wire();
 })();
 </script>
-
-
-<script type="module">
-/* ===========================================================================
-   Ripper WebXR Glue (robust)
-   - Waits for `ripper-ready` so renderer is guaranteed to exist.
-   - Uses requiredFeatures: ['local-floor'] for better success.
-   - Clean UI state & control handoff.
-   =========================================================================== */
-
-(function bootXR(){
-  const vrBtn = document.getElementById('vrBtn');
-
-  function waitForRendererAndWire() {
-    const ready = !!(document.getElementById('vrBtn') && window.renderer);
-    if (ready) return start();
-    setTimeout(waitForRendererAndWire, 50);
-  }
-
-  // kick both mechanisms
-  if (window?.renderer) start();
-  else {
-    window.addEventListener('ripper-ready', start, { once:true });
-    // Belt & suspenders: poll until renderer exists too
-    (function waitForRenderer(){
-      if (window?.renderer) return start();
-      setTimeout(waitForRenderer, 50);
-    })();
-  }
-
-  // Defer until renderer is published, then wire once.
-  function start() {
-    // Safety again (in case of hot reloads with detached DOM)
-    if (!vrBtn || !window?.renderer) {
-      console.warn('[WebXR] VR button wiring skipped (no renderer or button).');
-      return;
-    }
-
-    const { renderer, controls, Engine } = window;
-    renderer.xr.enabled = true;
-
-
-  // [ANCHOR:xr-overlay-ui]
-  const xrUI = (function(){
-    const wrap = document.createElement('div');
-    wrap.id = 'xrOverlay';
-    wrap.style.cssText = `
-      position:fixed; left:50%; bottom:28px; transform:translateX(-50%);
-      display:none; gap:10px; z-index:9999; pointer-events:auto;
-    `;
-    const mkBtn = (label)=> {
-      const b = document.createElement('button');
-      b.textContent = label;
-      b.style.cssText = `
-        font:14px ui-monospace,Menlo,monospace; font-weight:600;
-        padding:10px 14px; border-radius:10px; border:1px solid #333;
-        background:rgba(0,0,0,.6); color:#eee; backdrop-filter:blur(6px);
-        cursor:pointer;
-      `;
-      return b;
-    };
-    const exitBtn = mkBtn('Exit VR');
-    const recBtn  = mkBtn('Recenter');
-    wrap.appendChild(recBtn);
-    wrap.appendChild(exitBtn);
-    document.body.appendChild(wrap);
-
-    return {
-      show(){ wrap.style.display = 'flex'; },
-      hide(){ wrap.style.display = 'none'; },
-      onExit(fn){ exitBtn.onclick = fn; },
-      onRecenter(fn){ recBtn.onclick = fn; }
-    };
-  })();
-
-    let xrSession = null;
-
-    // ---- UI helper ----
-    function setBtnState({ text, disabled=false, active=false, title }) {
-      vrBtn.textContent = text;
-      vrBtn.title = title || text;
-      vrBtn.disabled = !!disabled;
-      vrBtn.classList.toggle('active', !!active);
-    }
-
-    // ---- Feature probe ----
-    const isSecure = window.isSecureContext;
-    const hasXR = !!navigator.xr;
-
-    async function getBestMode() {
-      try {
-        if (!hasXR || !isSecure) return null;
-        if (await navigator.xr.isSessionSupported('immersive-vr')) return 'immersive-vr';
-        if (await navigator.xr.isSessionSupported('immersive-ar')) return 'immersive-ar';
-        return null;
-      } catch (e) {
-        console.warn('[WebXR] support probe failed:', e);
-        return null;
-      }
-    }
-
-    
-
-  // [ANCHOR:xr-rig-helpers]
-  let xrLoopActive = false;
-
-  // Parent group of the WebXR ArrayCamera; safe to transform for user motion
-  function xrRig() {
-    const cam = renderer.xr.getCamera();
-    return cam && cam.parent ? cam.parent : null;
-  }
-
-  function xrRecenter() {
-    try {
-      const rig = xrRig(); if (!rig) return;
-      const t = (window.controls && window.controls.target)
-        ? window.controls.target.clone()
-        : new THREE.Vector3(0,0,0);
-      const dir = new THREE.Vector3().subVectors(t, rig.position).setY(0).normalize();
-      if (dir.lengthSq() === 0) return;
-      const yaw = Math.atan2(dir.x, dir.z) * -1;
-      rig.rotation.set(0, yaw, 0);
-    } catch(e){ console.warn('[XR] recenter failed', e); }
-  }
-
-  function xrGamepadLoop() {
-    const session = renderer.xr.getSession?.();
-    if (!session) { xrLoopActive = false; return; }
-    xrLoopActive = true;
-
-    const rig = xrRig();
-    const dt = 1/72;
-    const rotSpeed = 1.2;   // rad/s at full deflection
-    const dolly = 2.0;      // m/s at full deflection
-
-    let axX = 0, axY = 0, exitPressed = false;
-
-    try {
-      for (const src of session.inputSources) {
-        const gp = src && src.gamepad;
-        if (!gp) continue;
-        const x = gp.axes[2] ?? gp.axes[0] ?? 0;
-        const y = gp.axes[3] ?? gp.axes[1] ?? 0;
-        if (Math.abs(x) > Math.abs(axX)) axX = x;
-        if (Math.abs(y) > Math.abs(axY)) axY = y;
-        if (gp.buttons && gp.buttons[1] && gp.buttons[1].pressed) exitPressed = true; // B/Y
-      }
-    } catch(_) {}
-
-    if (rig) {
-      if (Math.abs(axX) > 0.05) rig.rotateY(-axX * rotSpeed * dt);
-      if (Math.abs(axY) > 0.05) rig.translateZ(axY * dolly * dt); // up = zoom in
-    }
-
-    if (exitPressed) exitXR();
-
-    if (xrLoopActive) requestAnimationFrame(xrGamepadLoop);
-  }
-
-
-
-
-    // Prefer stable floor tracking as required; everything else optional.
-    // [ANCHOR:xr-features]
-    const VR_FEATURES = {
-      requiredFeatures: ['local-floor'],
-      optionalFeatures: [
-      'bounded-floor',
-      'hand-tracking',
-      'layers',
-      'anchors',
-      'dom-overlay'
-    ],
-    domOverlay: { root: document.body }
-  };
-
-    function onSessionStarted(session) {
-      xrSession = session;
-      renderer.xr.setSession(session);
-      if (controls) controls.enabled = false;
-      setBtnState({ text: 'Exit VR', active: true });
-
-      // [ANCHOR:xr-overlay-hooks]
-      xrUI.show();
-      xrUI.onExit(() => exitXR());
-      xrUI.onRecenter(() => xrRecenter());
-
-      // [ANCHOR:xr-loop-start]
-      if (!xrLoopActive) requestAnimationFrame(xrGamepadLoop);
-
-      session.addEventListener('end', onSessionEnded);
-  }
-
-  function onSessionEnded() {
-    xrSession = null;
-    if (controls) controls.enabled = true;
-    setBtnState({ text: 'Enter VR', active: false });
-
-    // [ANCHOR:xr-overlay-hooks-end]
-    xrUI.hide();
-
-    // [ANCHOR:xr-loop-stop]
-    xrLoopActive = false;
-  }
-
-    async function enterXR() {
-      const mode = await getBestMode();
-      
-      if (!mode) {
-        alert('WebXR not available.\n\nTips:\n• Serve over HTTPS (or localhost).\n• Use a WebXR-capable browser (Quest Browser / recent Chrome/Edge).\n• Headset must be awake/authorized.');
-        return;
-      }
-      try {
-        const session = await navigator.xr.requestSession(mode, VR_FEATURES);
-        onSessionStarted(session);
-      } catch (e) {
-        console.error('[WebXR] requestSession() failed:', e);
-        alert('Could not start XR session. See console for details.');
-      }
-    }
-
-    function exitXR() {
-      if (xrSession) xrSession.end().catch(()=>{});
-    }
-
-    // Button wiring (toggle)
-    vrBtn.addEventListener('click', () => {
-      if (xrSession) exitXR();
-      else enterXR();
-    });
-
-    // Initial availability state
-    (async () => {
-      if (!isSecure) {
-        setBtnState({ text: 'WebXR needs HTTPS', disabled: true, title: 'Serve over https:// or use localhost' });
-        return;
-      }
-      if (!hasXR) {
-        setBtnState({ text: 'WebXR unavailable', disabled: true, title: 'Browser lacks navigator.xr' });
-        return;
-      }
-      const mode = await getBestMode();
-      if (mode === 'immersive-vr') setBtnState({ text: 'Enter VR' });
-      else if (mode === 'immersive-ar') setBtnState({ text: 'Enter AR' });
-      else setBtnState({ text: 'WebXR unsupported', disabled: true });
-    })();
-
-    // Nicety: pause timeline when the tab hides (e.g., system dialogs on HMD)
-    document.addEventListener('visibilitychange', ()=>{
-      if (document.visibilityState === 'hidden' && Engine?.playing) Engine.pause?.();
-    });
-
-    // Cleanup for hot reloads
-    window.addEventListener('beforeunload', ()=>{ try { xrSession?.end(); } catch(_){} });
-  }
-
-  // If renderer is already there, start now; otherwise wait for our event.
-  if (window?.renderer) start();
-  else window.addEventListener('ripper-ready', start, { once:true });
-})();
-</script>
-
-
 </body>
 </html>

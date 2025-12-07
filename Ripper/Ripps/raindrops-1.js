@@ -4,13 +4,13 @@
 // destroys them at the bottom. Emits one every 500 ms. No looping per sphere.
 // Any T/D/L whose centroid is inside any live sphere → painted ORANGE; others → BASE.
 
-export const meta = { name: 'Emitter: Top→Bottom Spheres (orange)', fps: 60, duration: 120 };
+export const meta = { name: 'Emitter: Top→Bottom Spheres (orange)', fps: 60, duration: 30 };
 
 // ---- Tunables --------------------------------------------------------------
 const SPHERE_RADIUS_WU = 12.5; // 25% of 50 WU
 const EMIT_PERIOD_MS   = 500;  // spawn cadence
 const LIFETIME_MS      = 2000; // time for a sphere to travel from top to bottom
-const ORANGE = [1, 0.5, 0, 1];
+const ORANGE = [0, 0, 0, 1];
 const BASE   = [1, 1, 1, 1];
 
 // ---- Helpers ---------------------------------------------------------------

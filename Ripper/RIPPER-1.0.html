@@ -93,17 +93,6 @@ window.__WB_CONSTANTS__ = window.__WB_CONSTANTS__ || {
   .chip { display:inline-block; padding:2px 6px; border-radius:999px; border:1px solid #3a3a3a; font-size:11px; background:#0e0e0e; }
   .sep { height:1px; background:#222; margin:8px 0; }
 
-  #vrBtn {
-    cursor: pointer;
-    font-weight: 600;
-    border: 1px solid #2a2a2a;
-    background: #121212;
-    padding: 6px 10px;
-    border-radius: 8px;
-    }
-    #vrBtn[disabled] { opacity:.5; cursor:not-allowed; }
-
-
   /* Workbench axis view buttons (bottom-right, vertical) */
   #wbViews {
     position:fixed; bottom:14px; right:16px; z-index:26;
@@ -390,7 +379,6 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
 { "imports": {
     "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
     "OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js"
-    ,"BufferGeometryUtils": "https://unpkg.com/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js"
 }}
 </script>
 </head>
@@ -571,8 +559,6 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
     <label><input id="visL" type="checkbox" checked/> <span class="sw l"></span>L</label>
     <label><input id="visC" type="checkbox"/> Centroids</label>
   </div>
-  <button id="vrBtn" title="Enter VR" class="soft">Enter VR</button>
-  
 </div>
 
 <script type="module" id="fatline-imports">
@@ -582,7 +568,6 @@ input.axis-z:focus { box-shadow: 0 0 0 2px rgba(45,99,194,0.35); outline:none; }
 
   // Expose to the global so your existing module can feature-detect later
   Object.assign(window, { Line2, LineMaterial, LineGeometry });
-  window.dispatchEvent(new Event('ripper-ready'));
 </script>
 
 <script type="module">
@@ -2438,7 +2423,6 @@ if (wbEditorReset) wbEditorReset.addEventListener('click', ()=>{
   if(!wbEditing) return;
   const rec = wbEditing;
     if (rec.type === 'curve' && obj?.userData?.workbench?.params){
-    const obj = rec.mesh;
     const lift = 0.001;
     const r  = (SceneAPI?.info?.radius ?? (typeof getDomeRadiusFallback==='function' ? getDomeRadiusFallback(5) : 5));
     const L  = r;
@@ -3832,9 +3816,8 @@ function init(){
   applyFaceMode();
 }
 init();
-Object.assign(window, { renderer, scene, camera, controls, Engine });
-window.dispatchEvent(new Event('ripper-ready'));
 window.refreshWBList = refreshWBList;
+
 window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
 </script>
 </div>
@@ -3911,268 +3894,5 @@ window.buildBenchJSON = window.buildBenchJSON || buildBenchJSON;
   else wire();
 })();
 </script>
-
-
-<script type="module">
-/* ===========================================================================
-   Ripper WebXR Glue (robust)
-   - Waits for `ripper-ready` so renderer is guaranteed to exist.
-   - Uses requiredFeatures: ['local-floor'] for better success.
-   - Clean UI state & control handoff.
-   =========================================================================== */
-
-(function bootXR(){
-  const vrBtn = document.getElementById('vrBtn');
-
-  function waitForRendererAndWire() {
-    const ready = !!(document.getElementById('vrBtn') && window.renderer);
-    if (ready) return start();
-    setTimeout(waitForRendererAndWire, 50);
-  }
-
-  // kick both mechanisms
-  if (window?.renderer) start();
-  else {
-    window.addEventListener('ripper-ready', start, { once:true });
-    // Belt & suspenders: poll until renderer exists too
-    (function waitForRenderer(){
-      if (window?.renderer) return start();
-      setTimeout(waitForRenderer, 50);
-    })();
-  }
-
-  // Defer until renderer is published, then wire once.
-  function start() {
-    // Safety again (in case of hot reloads with detached DOM)
-    if (!vrBtn || !window?.renderer) {
-      console.warn('[WebXR] VR button wiring skipped (no renderer or button).');
-      return;
-    }
-
-    const { renderer, controls, Engine } = window;
-    renderer.xr.enabled = true;
-
-
-  // [ANCHOR:xr-overlay-ui]
-  const xrUI = (function(){
-    const wrap = document.createElement('div');
-    wrap.id = 'xrOverlay';
-    wrap.style.cssText = `
-      position:fixed; left:50%; bottom:28px; transform:translateX(-50%);
-      display:none; gap:10px; z-index:9999; pointer-events:auto;
-    `;
-    const mkBtn = (label)=> {
-      const b = document.createElement('button');
-      b.textContent = label;
-      b.style.cssText = `
-        font:14px ui-monospace,Menlo,monospace; font-weight:600;
-        padding:10px 14px; border-radius:10px; border:1px solid #333;
-        background:rgba(0,0,0,.6); color:#eee; backdrop-filter:blur(6px);
-        cursor:pointer;
-      `;
-      return b;
-    };
-    const exitBtn = mkBtn('Exit VR');
-    const recBtn  = mkBtn('Recenter');
-    wrap.appendChild(recBtn);
-    wrap.appendChild(exitBtn);
-    document.body.appendChild(wrap);
-
-    return {
-      show(){ wrap.style.display = 'flex'; },
-      hide(){ wrap.style.display = 'none'; },
-      onExit(fn){ exitBtn.onclick = fn; },
-      onRecenter(fn){ recBtn.onclick = fn; }
-    };
-  })();
-
-    let xrSession = null;
-
-    // ---- UI helper ----
-    function setBtnState({ text, disabled=false, active=false, title }) {
-      vrBtn.textContent = text;
-      vrBtn.title = title || text;
-      vrBtn.disabled = !!disabled;
-      vrBtn.classList.toggle('active', !!active);
-    }
-
-    // ---- Feature probe ----
-    const isSecure = window.isSecureContext;
-    const hasXR = !!navigator.xr;
-
-    async function getBestMode() {
-      try {
-        if (!hasXR || !isSecure) return null;
-        if (await navigator.xr.isSessionSupported('immersive-vr')) return 'immersive-vr';
-        if (await navigator.xr.isSessionSupported('immersive-ar')) return 'immersive-ar';
-        return null;
-      } catch (e) {
-        console.warn('[WebXR] support probe failed:', e);
-        return null;
-      }
-    }
-
-    
-
-  // [ANCHOR:xr-rig-helpers]
-  let xrLoopActive = false;
-
-  // Parent group of the WebXR ArrayCamera; safe to transform for user motion
-  function xrRig() {
-    const cam = renderer.xr.getCamera();
-    return cam && cam.parent ? cam.parent : null;
-  }
-
-  function xrRecenter() {
-    try {
-      const rig = xrRig(); if (!rig) return;
-      const t = (window.controls && window.controls.target)
-        ? window.controls.target.clone()
-        : new THREE.Vector3(0,0,0);
-      const dir = new THREE.Vector3().subVectors(t, rig.position).setY(0).normalize();
-      if (dir.lengthSq() === 0) return;
-      const yaw = Math.atan2(dir.x, dir.z) * -1;
-      rig.rotation.set(0, yaw, 0);
-    } catch(e){ console.warn('[XR] recenter failed', e); }
-  }
-
-  function xrGamepadLoop() {
-    const session = renderer.xr.getSession?.();
-    if (!session) { xrLoopActive = false; return; }
-    xrLoopActive = true;
-
-    const rig = xrRig();
-    const dt = 1/72;
-    const rotSpeed = 1.2;   // rad/s at full deflection
-    const dolly = 2.0;      // m/s at full deflection
-
-    let axX = 0, axY = 0, exitPressed = false;
-
-    try {
-      for (const src of session.inputSources) {
-        const gp = src && src.gamepad;
-        if (!gp) continue;
-        const x = gp.axes[2] ?? gp.axes[0] ?? 0;
-        const y = gp.axes[3] ?? gp.axes[1] ?? 0;
-        if (Math.abs(x) > Math.abs(axX)) axX = x;
-        if (Math.abs(y) > Math.abs(axY)) axY = y;
-        if (gp.buttons && gp.buttons[1] && gp.buttons[1].pressed) exitPressed = true; // B/Y
-      }
-    } catch(_) {}
-
-    if (rig) {
-      if (Math.abs(axX) > 0.05) rig.rotateY(-axX * rotSpeed * dt);
-      if (Math.abs(axY) > 0.05) rig.translateZ(axY * dolly * dt); // up = zoom in
-    }
-
-    if (exitPressed) exitXR();
-
-    if (xrLoopActive) requestAnimationFrame(xrGamepadLoop);
-  }
-
-
-
-
-    // Prefer stable floor tracking as required; everything else optional.
-    // [ANCHOR:xr-features]
-    const VR_FEATURES = {
-      requiredFeatures: ['local-floor'],
-      optionalFeatures: [
-      'bounded-floor',
-      'hand-tracking',
-      'layers',
-      'anchors',
-      'dom-overlay'
-    ],
-    domOverlay: { root: document.body }
-  };
-
-    function onSessionStarted(session) {
-      xrSession = session;
-      renderer.xr.setSession(session);
-      if (controls) controls.enabled = false;
-      setBtnState({ text: 'Exit VR', active: true });
-
-      // [ANCHOR:xr-overlay-hooks]
-      xrUI.show();
-      xrUI.onExit(() => exitXR());
-      xrUI.onRecenter(() => xrRecenter());
-
-      // [ANCHOR:xr-loop-start]
-      if (!xrLoopActive) requestAnimationFrame(xrGamepadLoop);
-
-      session.addEventListener('end', onSessionEnded);
-  }
-
-  function onSessionEnded() {
-    xrSession = null;
-    if (controls) controls.enabled = true;
-    setBtnState({ text: 'Enter VR', active: false });
-
-    // [ANCHOR:xr-overlay-hooks-end]
-    xrUI.hide();
-
-    // [ANCHOR:xr-loop-stop]
-    xrLoopActive = false;
-  }
-
-    async function enterXR() {
-      const mode = await getBestMode();
-      
-      if (!mode) {
-        alert('WebXR not available.\n\nTips:\n• Serve over HTTPS (or localhost).\n• Use a WebXR-capable browser (Quest Browser / recent Chrome/Edge).\n• Headset must be awake/authorized.');
-        return;
-      }
-      try {
-        const session = await navigator.xr.requestSession(mode, VR_FEATURES);
-        onSessionStarted(session);
-      } catch (e) {
-        console.error('[WebXR] requestSession() failed:', e);
-        alert('Could not start XR session. See console for details.');
-      }
-    }
-
-    function exitXR() {
-      if (xrSession) xrSession.end().catch(()=>{});
-    }
-
-    // Button wiring (toggle)
-    vrBtn.addEventListener('click', () => {
-      if (xrSession) exitXR();
-      else enterXR();
-    });
-
-    // Initial availability state
-    (async () => {
-      if (!isSecure) {
-        setBtnState({ text: 'WebXR needs HTTPS', disabled: true, title: 'Serve over https:// or use localhost' });
-        return;
-      }
-      if (!hasXR) {
-        setBtnState({ text: 'WebXR unavailable', disabled: true, title: 'Browser lacks navigator.xr' });
-        return;
-      }
-      const mode = await getBestMode();
-      if (mode === 'immersive-vr') setBtnState({ text: 'Enter VR' });
-      else if (mode === 'immersive-ar') setBtnState({ text: 'Enter AR' });
-      else setBtnState({ text: 'WebXR unsupported', disabled: true });
-    })();
-
-    // Nicety: pause timeline when the tab hides (e.g., system dialogs on HMD)
-    document.addEventListener('visibilitychange', ()=>{
-      if (document.visibilityState === 'hidden' && Engine?.playing) Engine.pause?.();
-    });
-
-    // Cleanup for hot reloads
-    window.addEventListener('beforeunload', ()=>{ try { xrSession?.end(); } catch(_){} });
-  }
-
-  // If renderer is already there, start now; otherwise wait for our event.
-  if (window?.renderer) start();
-  else window.addEventListener('ripper-ready', start, { once:true });
-})();
-</script>
-
-
 </body>
 </html>

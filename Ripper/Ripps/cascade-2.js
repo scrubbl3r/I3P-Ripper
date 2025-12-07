@@ -13,8 +13,8 @@ const SPHERE_DIAMETER_MIN_WU = 2.0;
 const SPHERE_DIAMETER_MAX_WU = 40.0;
 
 const EMIT_PERIOD_MS   = 4;
-const START_FRAC_MIN   = 0.05;
-const START_FRAC_MAX   = 0.05;
+const START_FRAC_MIN   = 0.95;
+const START_FRAC_MAX   = 0.95;
 
 // Geometric acceleration stabilized vs dt using a reference FPS.
 const FPS_REF          = meta.fps || 60;
@@ -25,11 +25,11 @@ const SPEED_SCALE      = 0.7;
 
 // Layering
 const INK_ALPHA_BASE   = 0.20;  // your “20% per hit”
-const INK_ALPHA_MAX    = .75;  // catch-up cap near the end (only if behind)
+const INK_ALPHA_MAX    = 0.50;  // catch-up cap near the end (only if behind)
 const STACK_MODE       = 'over'; // 'over' (smooth) or 'linear' (fast clamp)
 
 // “Done” threshold (Q3 a = 98% ink)
-const DONE_INK         = 0.98;
+const DONE_INK         = 0.95;
 const DONE_G_MAX       = Math.round((1 - DONE_INK) * 255); // <= 5 is “done”
 
 // Coverage guidance (Q1 b + Q4 b)
@@ -209,11 +209,12 @@ export function update(api, t/*s*/, dt/*s*/){
         continue;
       }
 
-      d.s += (d.step * frames * SPEED_SCALE);
+      d.s -= (d.step * frames * SPEED_SCALE);
 
-      if (d.s >= 1 || d.s > S_CULL_OVER){
+      if (d.s <= 0 || d.s < -S_CULL_OVER){
         spheres.splice(i, 1);
-      }
+    }
+
     }
   }
 
@@ -356,9 +357,7 @@ function paint(api, t){
 
         const aOld = 1 - (gOld / 255);
         const aNew = stackInk(aOld, inkAlpha);
-        let gNew = Math.round((1 - aNew) * 255);
-
-        if (gNew <= 2) gNew = 0;
+        const gNew = Math.round((1 - aNew) * 255);
 
         if (gNew < gOld){
           paintedG.set(id, gNew);
