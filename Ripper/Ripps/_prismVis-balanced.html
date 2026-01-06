@@ -1,0 +1,290 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Prism Mirrors Visualizer — BALANCED</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html, body { margin:0; height:100%; background:#050505; overflow:hidden; }
+    #ui {
+      position:fixed; top:12px; left:12px;
+      color:#ddd; font:12px ui-monospace, SFMono-Regular, Menlo, monospace;
+      background:rgba(0,0,0,.55); padding:10px 12px; border-radius:10px;
+      border:1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(6px);
+      max-width: 520px;
+      z-index: 10;
+    }
+    #ui label { display:flex; justify-content:space-between; gap:10px; margin:6px 0; }
+    #ui input[type="range"] { width: 200px; }
+    #ui .row { display:flex; gap:10px; align-items:center; }
+    #ui .row input[type="number"] { width:78px; background:#111; color:#ddd; border:1px solid #333; border-radius:6px; padding:2px 6px; }
+    canvas { display:block; }
+    .tag {
+      display:inline-block; padding:2px 8px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06);
+      margin-left:8px; font-weight:700; letter-spacing:.4px;
+    }
+    .note {
+      opacity:.75;
+      margin-top:8px;
+      line-height:1.35;
+      max-width: 480px;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="ui">
+    <div style="font-weight:700; margin-bottom:6px;">
+      Prism Mirror Planes (Great Circles)
+      <span class="tag">BALANCED</span>
+    </div>
+
+    <label>
+      MIRROR_PLANES
+      <span class="row">
+        <input id="planesRange" type="range" min="1" max="10" step="1" value="4">
+        <input id="planesNum" type="number" min="1" max="10" step="1" value="4">
+      </span>
+    </label>
+
+    <label>
+      PLANE_ROT_SPEED (base spin around UP)
+      <span class="row">
+        <input id="speedRange" type="range" min="0" max="2.0" step="0.01" value="0.60">
+        <input id="speedNum" type="number" min="0" max="10" step="0.01" value="0.60">
+      </span>
+    </label>
+
+    <label>
+      PLANE_TWIST
+      <span class="row">
+        <input id="twistRange" type="range" min="0" max="1.6" step="0.01" value="0.90">
+        <input id="twistNum" type="number" min="0" max="10" step="0.01" value="0.90">
+      </span>
+    </label>
+
+    <div class="note">
+      Green = dome wireframe<br/>
+      Orange = mirror planes + great circles<br/>
+      Balanced rig = evenly-spaced mirror set + shared precessing tilt + phase-balanced wobble
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    // --- Controls (same surface knobs) ---
+    let MIRROR_PLANES = 4;
+    let PLANE_ROT_SPEED = 0.60;
+    let PLANE_TWIST = 0.90;
+
+    // --- Balanced motion constants (fixed for clarity) ---
+    const FIELD_PRECESS_SPEED = 0.08;  // rad/sec
+    const FIELD_TILT_ANGLE    = 0.35;  // rad
+    const FIELD_TILT_BREATH   = 0.18;  // rad
+    const FIELD_BREATH_FREQ   = 0.07;  // cycles/sec
+
+    const PERPLANE_WOB_ANGLE  = 0.18;  // rad
+    const PERPLANE_WOB_FREQ   = 0.14;  // cycles/sec
+    const PERPLANE_WOB_TWIST  = 1.00;  // phase spread
+
+    const ROLL_SPEED          = 0.06;  // rad/sec (gentle roll around UP)
+
+    // --- Renderer / scene ---
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 180, 420);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.55);
+    dir.position.set(1, 1, 0.5);
+    scene.add(dir);
+
+    // --- Dome wireframe (green) ---
+    const R = 200;
+    const domeWire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(new THREE.SphereGeometry(R, 48, 24)),
+      new THREE.LineBasicMaterial({ color: 0x00ff66, transparent:true, opacity: 0.9 })
+    );
+    scene.add(domeWire);
+
+    // --- Mirrors group (orange) ---
+    const mirrorGroup = new THREE.Group();
+    scene.add(mirrorGroup);
+
+    const planeMat  = new THREE.MeshBasicMaterial({ color: 0xff8a00, wireframe: true, transparent:true, opacity: 0.35 });
+    const circleMat = new THREE.LineBasicMaterial({ color: 0xff8a00, transparent:true, opacity: 0.85 });
+
+    function buildGreatCirclePoints(radius, segments=240){
+      const pts = [];
+      for (let i=0;i<=segments;i++){
+        const t = (i/segments) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(t)*radius, Math.sin(t)*radius, 0)); // XY plane
+      }
+      return pts;
+    }
+    const baseCircleGeom = new THREE.BufferGeometry().setFromPoints(buildGreatCirclePoints(R, 240));
+
+    function clearMirrors(){
+      while (mirrorGroup.children.length){
+        const c = mirrorGroup.children.pop();
+        if (c.geometry) c.geometry.dispose();
+      }
+    }
+
+    function rebuildMirrors(){
+      clearMirrors();
+      for (let k=0; k<MIRROR_PLANES; k++){
+        const planeMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(R*2.2, R*2.2, 12, 12),
+          planeMat
+        );
+        const circle = new THREE.Line(baseCircleGeom.clone(), circleMat);
+        mirrorGroup.add(planeMesh, circle);
+      }
+    }
+    rebuildMirrors();
+
+    // --- UI wiring ---
+    function bindPair(range, num, setter){
+      const syncFromRange = () => { num.value = range.value; setter(parseFloat(range.value)); };
+      const syncFromNum   = () => { range.value = num.value; setter(parseFloat(num.value)); };
+      range.addEventListener("input", syncFromRange);
+      num.addEventListener("change", syncFromNum);
+    }
+
+    bindPair(
+      document.getElementById("planesRange"),
+      document.getElementById("planesNum"),
+      (v)=>{ MIRROR_PLANES = Math.max(1, Math.min(10, Math.round(v))); rebuildMirrors(); }
+    );
+    bindPair(
+      document.getElementById("speedRange"),
+      document.getElementById("speedNum"),
+      (v)=>{ PLANE_ROT_SPEED = v; }
+    );
+    bindPair(
+      document.getElementById("twistRange"),
+      document.getElementById("twistNum"),
+      (v)=>{ PLANE_TWIST = v; }
+    );
+
+    // --- Small vector math (Rodrigues rotate around axis) ---
+    const TAU = Math.PI * 2;
+    const dot3 = (ax,ay,az,bx,by,bz)=> ax*bx + ay*by + az*bz;
+    const cross3 = (ax,ay,az,bx,by,bz)=> [ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx];
+    const norm3 = (x,y,z)=>{
+      const m = Math.hypot(x,y,z) || 1;
+      return [x/m, y/m, z/m];
+    };
+    function rotateAroundAxis(vx,vy,vz, kx,ky,kz, a){
+      const c = Math.cos(a), s = Math.sin(a);
+      const d = dot3(vx,vy,vz, kx,ky,kz);
+      const cx = ky*vz - kz*vy;
+      const cy = kz*vx - kx*vz;
+      const cz = kx*vy - ky*vx;
+      return [
+        vx*c + cx*s + kx*d*(1-c),
+        vy*c + cy*s + ky*d*(1-c),
+        vz*c + cz*s + kz*d*(1-c)
+      ];
+    }
+
+    // --- Animate: balanced normals (coherent rig) ---
+    // We use UP = world Y for this demo.
+    const U = [0,1,0];      // up axis
+    const B = [1,0,0];      // base direction perpendicular to UP
+    const P0 = [0,0,1];     // another perpendicular axis
+
+    const zAxis = new THREE.Vector3(0,0,1);
+    const tmpN  = new THREE.Vector3();
+    const q     = new THREE.Quaternion();
+    const clock = new THREE.Clock();
+
+    function animate(){
+      const t = clock.getElapsedTime();
+
+      const baseSpin = t * PLANE_ROT_SPEED;
+      const rollA    = t * ROLL_SPEED;
+
+      // Precess P around UP
+      const precA = t * FIELD_PRECESS_SPEED;
+      let P = rotateAroundAxis(P0[0],P0[1],P0[2], U[0],U[1],U[2], precA);
+      P = norm3(P[0],P[1],P[2]);
+      const Pn = P;
+
+      // Q = UP x P
+      let Q = cross3(U[0],U[1],U[2], Pn[0],Pn[1],Pn[2]);
+      Q = norm3(Q[0],Q[1],Q[2]);
+      const Qn = Q;
+
+      // Shared breathing tilt
+      const breath = Math.sin(t * TAU * FIELD_BREATH_FREQ) * FIELD_TILT_BREATH;
+      const sharedTilt = FIELD_TILT_ANGLE + breath;
+
+      const slice = TAU / Math.max(1, MIRROR_PLANES);
+
+      let idx = 0;
+      for (let k=0; k<MIRROR_PLANES; k++){
+        const a = baseSpin + k * slice * PLANE_TWIST;
+
+        // 1) Evenly spaced around UP
+        let n = rotateAroundAxis(B[0],B[1],B[2], U[0],U[1],U[2], a);
+
+        // 2) Shared tilt about P (coherent “rig lean”)
+        n = rotateAroundAxis(n[0],n[1],n[2], Pn[0],Pn[1],Pn[2], sharedTilt);
+
+        // 3) Balanced per-plane wobble about Q (phase distributed)
+        const phase = (k / Math.max(1, MIRROR_PLANES)) * TAU * PERPLANE_WOB_TWIST;
+        const wob = Math.sin(t * TAU * PERPLANE_WOB_FREQ + phase) * PERPLANE_WOB_ANGLE;
+        n = rotateAroundAxis(n[0],n[1],n[2], Qn[0],Qn[1],Qn[2], wob);
+
+        // 4) Gentle roll around UP (carousel coherence)
+        n = rotateAroundAxis(n[0],n[1],n[2], U[0],U[1],U[2], rollA);
+
+        // normalize, apply
+        n = norm3(n[0],n[1],n[2]);
+        tmpN.set(n[0], n[1], n[2]);
+
+        q.setFromUnitVectors(zAxis, tmpN);
+
+        const planeMesh = mirrorGroup.children[idx++];
+        const circle    = mirrorGroup.children[idx++];
+
+        planeMesh.setRotationFromQuaternion(q);
+        circle.setRotationFromQuaternion(q);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    window.addEventListener("resize", ()=>{
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

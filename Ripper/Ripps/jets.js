@@ -1,20 +1,56 @@
-// ripp—tdl-layered-ink-black-guided (coverage-biased az, dt-stable accel, adaptive alpha).js
+// ripp—tdl-layered-ink-black-guided (origin-anywhere, antipode-run, dt-stable accel, adaptive alpha)
+// FIX: travel fade is measured from TRUE origin (s=0), full strength at origin, fades with distance.
+// Also FIX: {x:0,y:0,z:0} maps to TOP by default via the frame fallback (as in your working version).
+//
 // Preview contract: init(api), update(api, t, dt)
 
 export const meta = {
-  name: 'Layered Ink (guided): Top→Bottom (monoblack, 20% ink stacks, guaranteed-ish fill)',
+  name: 'Layered Ink (guided): Origin→Antipode + Travel-Limited Fade (monoblack, stacked ink, guided coverage)',
   fps: 60,
   duration: 30
 };
 
+// ============================================================================
+// ORIGIN CONTROL (WORLD UNITS)
+// ----------------------------------------------------------------------------
+// This point can be anywhere (not necessarily on the surface).
+// We convert it to a direction from the dome center, then SNAP to the dome
+// surface so s=0 starts exactly on the dome, and s increases toward the antipode.
+//
+// IMPORTANT: If SPAWN_ORIGIN_WU equals the dome center (or is degenerate),
+// we fall back to "top of dome" (Y-up). Therefore:
+//   {x:0,y:0,z:0} acts as "top" in your dome if your center is {0,0,0}.
+// ============================================================================
+const SPAWN_ORIGIN_WU = { x: 150, y: 0, z: 0 };
+
+// ============================================================================
+// NEW: TRAVEL-LIMITED PAINT EFFECT
+// ----------------------------------------------------------------------------
+// We fade the painting strength based on how far the sphere has traveled along
+// the origin→antipode path.
+//
+// - EFFECT_TRAVEL_PCT = 100  => full influence at origin, fades to 0 at antipode
+// - EFFECT_TRAVEL_PCT = 50   => full influence at origin, fades to 0 halfway
+//
+// EFFECT_FADE_POW shapes the fade curve:
+// - 1.0 linear
+// - <1  holds strong longer then drops near the end
+// - >1  fades sooner / more aggressively
+// ============================================================================
+const EFFECT_TRAVEL_PCT = 100; // 0..100 (try 50, 75, 100)
+const EFFECT_FADE_POW   = 3.5; // easing power (try 0.6, 1.0, 2.0)
+
+// Optional perf: cull spheres once they’ve fully faded (recommended)
+const CULL_AT_EFFECT_END = true;
+
 // ---- Tunables --------------------------------------------------------------
 // per-sphere diameter range (world units)
-const SPHERE_DIAMETER_MIN_WU = 2.0;
-const SPHERE_DIAMETER_MAX_WU = 40.0;
+const SPHERE_DIAMETER_MIN_WU = 10.0;
+const SPHERE_DIAMETER_MAX_WU = 25.0;
 
-const EMIT_PERIOD_MS   = 4;
-const START_FRAC_MIN   = 0.05;
-const START_FRAC_MAX   = 0.05;
+const EMIT_PERIOD_MS   = 12;
+const START_FRAC_MIN   = 0.00;
+const START_FRAC_MAX   = 0.10;
 
 // Geometric acceleration stabilized vs dt using a reference FPS.
 const FPS_REF          = meta.fps || 60;
@@ -24,25 +60,25 @@ const STEP_MAX         = 0.1;
 const SPEED_SCALE      = 0.7;
 
 // Layering
-const INK_ALPHA_BASE   = 0.20;  // your “20% per hit”
-const INK_ALPHA_MAX    = .75;  // catch-up cap near the end (only if behind)
+const INK_ALPHA_BASE   = 0.40;  // your “20% per hit”
+const INK_ALPHA_MAX    = 0.75;  // catch-up cap near the end (only if behind)
 const STACK_MODE       = 'over'; // 'over' (smooth) or 'linear' (fast clamp)
 
-// “Done” threshold (Q3 a = 98% ink)
+// “Done” threshold (98% ink)
 const DONE_INK         = 0.98;
 const DONE_G_MAX       = Math.round((1 - DONE_INK) * 255); // <= 5 is “done”
 
-// Coverage guidance (Q1 b + Q4 b)
-const BIN_COUNT        = 36;    // azimuth slices
-const RNG_SPAWN_PROB   = 0.05;  // percent of spawns that ignore guidance (keeps it organic)
-const BIAS_POW_MIN     = 1.50;  // guidance strength ramps a bit over time
+// Coverage guidance
+const BIN_COUNT        = 36;    // heading slices around the ORIGIN axis
+const RNG_SPAWN_PROB   = 0.05;
+const BIAS_POW_MIN     = 1.50;
 const BIAS_POW_MAX     = 1.55;
-const BIN_JITTER_FRAC  = 0.65;  // jitter within bin width
+const BIN_JITTER_FRAC  = 0.65;
 const EPS_WEIGHT       = 1e-3;
 
-// Catch-up behavior (Q2 b)
-const CATCHUP_START_FRAC = 0.60; // don’t boost alpha until late
-const BEHIND_WINDOW      = 0.22; // normalization window for “how behind” we are
+// Catch-up behavior
+const CATCHUP_START_FRAC = 0.60;
+const BEHIND_WINDOW      = 0.22;
 
 // GC / perf controls
 const MAX_LIVE_SPHERES = 600;
@@ -66,55 +102,149 @@ function wrapRad(a){
   a = a % TAU;
   return a < 0 ? a + TAU : a;
 }
+function dot3(ax,ay,az,bx,by,bz){ return ax*bx + ay*by + az*bz; }
+function cross3(ax,ay,az,bx,by,bz){
+  return [ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx];
+}
+function norm3(x,y,z){
+  const m = Math.hypot(x,y,z) || 1;
+  return [x/m, y/m, z/m];
+}
 
 // Stack “ink density” a∈[0..1].
 function stackInk(aOld, inkAlpha){
   if (STACK_MODE === 'linear'){
     return Math.min(1, aOld + inkAlpha);
   }
-  // 'over' / multiplicative: add inkAlpha of remaining whiteness
   return 1 - (1 - aOld) * (1 - inkAlpha);
 }
 
-// Map path fraction s∈[0..1] to a meridian rotated by az around Y (Y-up)
-function posOnMeridianAz(center, domeR, s, az){
-  const theta = Math.PI/2 - Math.PI * s;
-  const y = center.y + domeR * Math.sin(theta);
-  const rHor = domeR * Math.cos(theta);
-  const x = center.x + rHor * Math.sin(az);
-  const z = center.z + rHor * Math.cos(az);
-  return { x, y, z };
+// ============================================================================
+// Local sphere frame (origin-as-north-pole)
+// ============================================================================
+function buildOriginFrame(center, domeR){
+  const dx = (SPAWN_ORIGIN_WU?.x ?? 0) - center.x;
+  const dy = (SPAWN_ORIGIN_WU?.y ?? 0) - center.y;
+  const dz = (SPAWN_ORIGIN_WU?.z ?? 0) - center.z;
+
+  let Ux,Uy,Uz;
+  if (Math.hypot(dx,dy,dz) < 1e-6){
+    // default: top of dome (Y-up)
+    Ux=0; Uy=1; Uz=0;
+  } else {
+    ;[Ux,Uy,Uz] = norm3(dx,dy,dz);
+  }
+
+  // Pick a reference axis not parallel to U
+  let rx=0, ry=1, rz=0; // world Y
+  const d = Math.abs(dot3(Ux,Uy,Uz, rx,ry,rz));
+  if (d > 0.92){
+    rx=0; ry=0; rz=1; // switch to world Z
+  }
+
+  // B = normalize(ref × U)
+  let B = cross3(rx,ry,rz, Ux,Uy,Uz);
+  let Bx=0, By=0, Bz=0;
+  ;[Bx,By,Bz] = norm3(B[0], B[1], B[2]);
+
+  // P = normalize(U × B)
+  let P = cross3(Ux,Uy,Uz, Bx,By,Bz);
+  let Px=0, Py=0, Pz=0;
+  ;[Px,Py,Pz] = norm3(P[0], P[1], P[2]);
+
+  // snapped origin point on dome surface
+  const origin = {
+    x: center.x + Ux * domeR,
+    y: center.y + Uy * domeR,
+    z: center.z + Uz * domeR
+  };
+
+  return { origin, U:[Ux,Uy,Uz], B:[Bx,By,Bz], P:[Px,Py,Pz] };
 }
 
-function azOfPoint(center, p){
-  const dx = p.x - center.x;
-  const dz = p.z - center.z;
-  // matches our meridian: x = sin(az), z = cos(az)
-  return wrapRad(Math.atan2(dx, dz));
+function posFromOriginToAntipode(center, domeR, frame, s, az){
+  const theta = Math.PI/2 - Math.PI * s; // +pi/2..-pi/2
+  const sinT = Math.sin(theta);
+  const cosT = Math.cos(theta);
+
+  const [Ux,Uy,Uz] = frame.U;
+  const [Bx,By,Bz] = frame.B;
+  const [Px,Py,Pz] = frame.P;
+
+  const sinA = Math.sin(az);
+  const cosA = Math.cos(az);
+
+  const Tx = Bx*sinA + Px*cosA;
+  const Ty = By*sinA + Py*cosA;
+  const Tz = Bz*sinA + Pz*cosA;
+
+  const dx = Ux*sinT + Tx*cosT;
+  const dy = Uy*sinT + Ty*cosT;
+  const dz = Uz*sinT + Tz*cosT;
+
+  return {
+    x: center.x + dx * domeR,
+    y: center.y + dy * domeR,
+    z: center.z + dz * domeR
+  };
+}
+
+function azAroundOriginAxis(center, p, frame){
+  const vx = p.x - center.x;
+  const vy = p.y - center.y;
+  const vz = p.z - center.z;
+  let nx=0, ny=0, nz=0;
+  ;[nx,ny,nz] = norm3(vx,vy,vz);
+
+  const [Bx,By,Bz] = frame.B;
+  const [Px,Py,Pz] = frame.P;
+
+  const b = dot3(nx,ny,nz, Bx,By,Bz);
+  const q = dot3(nx,ny,nz, Px,Py,Pz);
+
+  return wrapRad(Math.atan2(b, q));
+}
+
+// ============================================================================
+// Travel fade
+// ----------------------------------------------------------------------------
+// s is global along the origin→antipode great-circle. Spheres start at s0.
+// We want FULL strength at the actual origin (s=0), and fade with distance from
+// the origin, not distance from s0.
+//
+// So fade is based on sClamped itself (0..1), with cutoff at sCut.
+// ============================================================================
+function travelFadeFromS(sClamped){
+  const travelFrac = clamp01(EFFECT_TRAVEL_PCT / 100);
+  if (travelFrac <= 1e-6) return 0;
+
+  const u = clamp01(sClamped / travelFrac); // 0 at origin, 1 at cutoff
+  const pow = Math.max(1e-6, EFFECT_FADE_POW);
+  return Math.pow(Math.max(0, 1 - u), pow); // 1 at origin → 0 at cutoff
 }
 
 // ---- State -----------------------------------------------------------------
 let IDS = [];
 let IDS_SET = new Set();
 let center = {x:0,y:0,z:0};
-let domeR = 250; // fallback
+let domeR = 250;
 let emitAccMs = 0;
 
 let posX = new Float32Array(0);
 let posY = new Float32Array(0);
 let posZ = new Float32Array(0);
 
-// bin mapping per id index + bin stats
+let ORIGIN_FRAME = null;
+
+// bins
 let idBinIdx = new Uint16Array(0);
 let binCount = new Uint32Array(BIN_COUNT);
 let binWhiteSum = new Float32Array(BIN_COUNT);
 
-// each sphere: { s, step, az, radiusWU, r2 }
 const spheres = [];
 let needFirstSpawnAtNow = true;
 
-// ink state per id: store grayscale byte g∈[0..255] (255=white, 0=black).
-const paintedG = new Map(); // id -> gByte
+const paintedG = new Map();
 let doneCount = 0;
 
 // ---- Lifecycle -------------------------------------------------------------
@@ -122,17 +252,14 @@ export function init(api){
   IDS = allTDLIds(api);
   IDS_SET = new Set(IDS);
 
-  // start from white (per your earlier Q2 A)
   api.resetColorsTo([1,1,1,1]);
 
   if (api.info && Number.isFinite(api.info.radius)) domeR = api.info.radius;
   if (api.info && api.info.center) {
-    center = {
-      x: api.info.center.x || 0,
-      y: api.info.center.y || 0,
-      z: api.info.center.z || 0
-    };
+    center = { x: api.info.center.x || 0, y: api.info.center.y || 0, z: api.info.center.z || 0 };
   }
+
+  ORIGIN_FRAME = buildOriginFrame(center, domeR);
 
   posX = new Float32Array(IDS.length);
   posY = new Float32Array(IDS.length);
@@ -151,7 +278,6 @@ export function init(api){
 export function update(api, t/*s*/, dt/*s*/){
   const dtMs = Math.max(0, dt * 1000);
 
-  // detect ID changes + clean maps + rebuild bins/sums
   const newIDS = allTDLIds(api);
   if (newIDS.length !== IDS.length){
     IDS = newIDS;
@@ -165,10 +291,15 @@ export function update(api, t/*s*/, dt/*s*/){
       if (!IDS_SET.has(key)) paintedG.delete(key);
     }
 
+    if (api.info && Number.isFinite(api.info.radius)) domeR = api.info.radius;
+    if (api.info && api.info.center) {
+      center = { x: api.info.center.x || 0, y: api.info.center.y || 0, z: api.info.center.z || 0 };
+    }
+    ORIGIN_FRAME = buildOriginFrame(center, domeR);
+
     rebuildBins(api);
   }
 
-  // cache positions once per frame
   for (let i = 0; i < IDS.length; i++){
     const p = api.posOf(IDS[i]);
     if (p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)){
@@ -183,7 +314,6 @@ export function update(api, t/*s*/, dt/*s*/){
     needFirstSpawnAtNow = false;
   }
 
-  // spawn cadence (unchanged per your request)
   emitAccMs += dtMs;
   while (emitAccMs >= EMIT_PERIOD_MS){
     emitAccMs -= EMIT_PERIOD_MS;
@@ -194,6 +324,10 @@ export function update(api, t/*s*/, dt/*s*/){
   if (spheres.length){
     const frames = dt * FPS_REF;
     const accelMul = frames > 0 ? Math.pow(ACCEL, frames) : 1;
+
+    // optional earlier cull at fade end (sCut)
+    const travelFrac = clamp01(EFFECT_TRAVEL_PCT / 100);
+    const sCut = travelFrac > 1e-6 ? (travelFrac * S_CULL_OVER) : 0;
 
     for (let i = spheres.length - 1; i >= 0; i--){
       const d = spheres[i];
@@ -209,10 +343,13 @@ export function update(api, t/*s*/, dt/*s*/){
         continue;
       }
 
+      // Always increase s away from origin toward antipode
       d.s += (d.step * frames * SPEED_SCALE);
 
-      if (d.s >= 1 || d.s > S_CULL_OVER){
-        spheres.splice(i, 1);
+      if (CULL_AT_EFFECT_END){
+        if (d.s >= sCut) spheres.splice(i, 1);
+      } else {
+        if (d.s >= 1 || d.s > S_CULL_OVER) spheres.splice(i, 1);
       }
     }
   }
@@ -228,12 +365,16 @@ function rebuildBins(api){
 
   doneCount = 0;
 
+  const bw = (Math.PI * 2) / BIN_COUNT;
+
   for (let i = 0; i < IDS.length; i++){
     const id = IDS[i];
     const p = api.posOf(id);
-    const az = (p && Number.isFinite(p.x)) ? azOfPoint(center, p) : 0;
 
-    const bw = (Math.PI * 2) / BIN_COUNT;
+    const az = (p && Number.isFinite(p.x) && ORIGIN_FRAME)
+      ? azAroundOriginAxis(center, p, ORIGIN_FRAME)
+      : 0;
+
     const b = Math.min(BIN_COUNT - 1, Math.max(0, Math.floor(az / bw)));
     idBinIdx[i] = b;
     binCount[b]++;
@@ -248,7 +389,6 @@ function chooseGuidedAz(t){
   const TAU = Math.PI * 2;
   const bw = TAU / BIN_COUNT;
 
-  // rng escape hatch (keeps it feeling alive)
   if (Math.random() < RNG_SPAWN_PROB){
     return Math.random() * TAU;
   }
@@ -256,21 +396,17 @@ function chooseGuidedAz(t){
   const dur = Math.max(0.001, meta.duration || 1);
   const progress = clamp01(t / dur);
 
-  // medium guidance ramps slightly over time
   const biasPow = BIAS_POW_MIN + (BIAS_POW_MAX - BIAS_POW_MIN) * progress;
 
-  // weight bins by remaining whiteness (unpainted-ness)
   let totalW = 0;
   const wArr = new Float32Array(BIN_COUNT);
 
   for (let b = 0; b < BIN_COUNT; b++){
-    // binWhiteSum is sum of (g/255) for ids in bin
     const w = Math.pow(binWhiteSum[b] + EPS_WEIGHT, biasPow);
     wArr[b] = w;
     totalW += w;
   }
 
-  // fallback to uniform if something goes weird
   if (!(totalW > 0)){
     return Math.random() * TAU;
   }
@@ -285,7 +421,6 @@ function chooseGuidedAz(t){
     }
   }
 
-  // pick an az inside bin with jitter
   const binStart = chosen * bw;
   let az = binStart + (Math.random() * bw);
 
@@ -299,30 +434,26 @@ function chooseGuidedAz(t){
 function spawnOne(api, t){
   if (spheres.length >= MAX_LIVE_SPHERES) return;
 
+  // Start at/near TRUE origin: s=0 (plus optional tiny offset)
   const s0 = randIn(START_FRAC_MIN, START_FRAC_MAX);
   const az = chooseGuidedAz(t);
 
-  const diamWU  = randIn(SPHERE_DIAMETER_MIN_WU, SPHERE_DIAMETER_MAX_WU);
+  const diamWU   = randIn(SPHERE_DIAMETER_MIN_WU, SPHERE_DIAMETER_MAX_WU);
   const radiusWU = diamWU * 0.5;
 
   spheres.push({ s: s0, step: STEP_INIT, az, radiusWU, r2: radiusWU * radiusWU });
 }
 
 function computeInkAlpha(t){
-  // progress vs schedule uses “done” fraction (>=98% ink)
   const total = Math.max(1, IDS.length);
   const doneFrac = doneCount / total;
 
   const dur = Math.max(0.001, meta.duration || 1);
   const target = clamp01(t / dur);
 
-  // only start catch-up late in the piece
   const lateRamp = smoothstep(CATCHUP_START_FRAC, 1.0, target);
 
-  // how behind are we? (0..1)
   const behind = clamp01((target - doneFrac) / BEHIND_WINDOW);
-
-  // boost alpha only if behind, only late
   const boost = behind * lateRamp;
 
   return INK_ALPHA_BASE + (INK_ALPHA_MAX - INK_ALPHA_BASE) * boost;
@@ -330,12 +461,22 @@ function computeInkAlpha(t){
 
 function paint(api, t){
   const changes = [];
-  const inkAlpha = computeInkAlpha(t);
+  const inkAlphaBase = computeInkAlpha(t);
 
   for (let si = 0; si < spheres.length; si++){
     const d = spheres[si];
+
+    // clamp s for position
     const sClamped = d.s < 0 ? 0 : (d.s > 1 ? 1 : d.s);
-    const C = posOnMeridianAz(center, domeR, sClamped, d.az);
+
+    // fade from TRUE origin (s=0), regardless of spawn jitter
+    const fade = travelFadeFromS(sClamped);
+    if (fade <= 1e-6) continue;
+
+    const inkAlpha = inkAlphaBase * fade;
+    if (inkAlpha <= 1e-6) continue;
+
+    const C = posFromOriginToAntipode(center, domeR, ORIGIN_FRAME, sClamped, d.az);
 
     const cx = C.x, cy = C.y, cz = C.z;
     const r2 = d.r2;
@@ -363,12 +504,10 @@ function paint(api, t){
         if (gNew < gOld){
           paintedG.set(id, gNew);
 
-          // update bin whiteness sum (so guidance stays accurate)
           const b = idBinIdx[ii] | 0;
-          const deltaW = (gOld - gNew) / 255; // whiteness decreased
+          const deltaW = (gOld - gNew) / 255;
           binWhiteSum[b] = Math.max(0, binWhiteSum[b] - deltaW);
 
-          // update done counter when crossing threshold
           if (gOld > DONE_G_MAX && gNew <= DONE_G_MAX) doneCount++;
 
           const g = gNew / 255;

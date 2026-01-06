@@ -1,0 +1,772 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Canonical Prism Rig — Tumble vs Balanced vs Paired (True Doppelgänger)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html, body { margin:0; height:100%; background:#050505; overflow:hidden; }
+    canvas { display:block; }
+
+    #ui{
+      position:fixed; top:12px; left:12px;
+      color:#ddd; font:12px ui-monospace, SFMono-Regular, Menlo, monospace;
+      background:rgba(0,0,0,.55); padding:10px 12px; border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(6px);
+      max-width: 430px;
+      z-index: 10;
+    }
+    #ui .title{ font-weight:800; margin-bottom:8px; }
+    #ui .hint{ opacity:.75; margin-top:10px; line-height:1.35; }
+    #ui label{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin:7px 0; }
+    #ui .row{ display:flex; gap:8px; align-items:center; justify-content:flex-end; }
+    #ui select, #ui input[type="number"]{
+      width: 160px;
+      background:#111; color:#ddd;
+      border:1px solid #333; border-radius:8px;
+      padding:3px 6px;
+    }
+    #ui input[type="range"]{ width: 160px; }
+    #ui button{
+      background:#111; color:#ddd;
+      border:1px solid #333; border-radius:10px;
+      padding:6px 10px; cursor:pointer;
+    }
+    #ui button:hover{ border-color:#555; }
+    #adv{
+      margin-top:10px; padding-top:10px;
+      border-top:1px solid rgba(255,255,255,.08);
+    }
+    #adv summary{ cursor:pointer; user-select:none; opacity:.9; }
+    .badge{
+      display:inline-block; padding:2px 6px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14); opacity:.85; margin-left:6px;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <div id="ui">
+    <div class="title">Canonical Prism Rig <span class="badge">Schema Demo</span></div>
+
+    <label>
+      RigMode
+      <span class="row">
+        <select id="rigMode">
+          <option value="tumble">tumble</option>
+          <option value="balanced">balanced</option>
+          <option value="paired">doppelgänger</option>
+        </select>
+      </span>
+    </label>
+
+    <label>
+      SpinMode
+      <span class="row">
+        <select id="spinMode">
+          <option value="uniform">uniform</option>
+          <option value="alternating">alternating (+ − + −)</option>
+          <option value="halves">halves (first +, second −)</option>
+          <option value="perPlane">perPlane (seeded speed map)</option>
+        </select>
+      </span>
+    </label>
+
+    <label>
+      BilateralMode
+      <span class="row">
+        <select id="bilateralMode">
+          <option value="off">off</option>
+          <option value="x">x-fold (x → |x|)</option>
+          <option value="z">z-fold (z → |z|)</option>
+        </select>
+      </span>
+    </label>
+
+    <label>
+      UP_AXIS
+      <span class="row">
+        <select id="upAxis">
+          <option value="y">y (default)</option>
+          <option value="z">z</option>
+          <option value="x">x</option>
+        </select>
+      </span>
+    </label>
+
+    <label>
+      MIRROR_PLANES
+      <span class="row">
+        <input id="planesRange" type="range" min="1" max="10" step="1" value="4">
+        <input id="planesNum" type="number" min="1" max="10" step="1" value="4">
+      </span>
+    </label>
+
+    <label>
+      BaseSpeed
+      <span class="row">
+        <input id="speedRange" type="range" min="-3.0" max="3.0" step="0.01" value="0.60">
+        <input id="speedNum" type="number" min="-10" max="10" step="0.01" value="0.60">
+      </span>
+    </label>
+
+    <label>
+      Twist
+      <span class="row">
+        <input id="twistRange" type="range" min="0" max="2.0" step="0.01" value="0.90">
+        <input id="twistNum" type="number" min="0" max="10" step="0.01" value="0.90">
+      </span>
+    </label>
+
+    <label>
+      Fan (±)
+      <span class="row">
+        <input id="fanRange" type="range" min="-1" max="1" step="0.01" value="0.00">
+        <input id="fanNum" type="number" min="-1" max="1" step="0.01" value="0.00">
+      </span>
+    </label>
+
+    <label>
+      FanBias (±)
+      <span class="row">
+        <input id="fanBiasRange" type="range" min="-1" max="1" step="0.01" value="0.00">
+        <input id="fanBiasNum" type="number" min="-1" max="1" step="0.01" value="0.00">
+      </span>
+    </label>
+
+    <label>
+      Energy
+      <span class="row">
+        <input id="energyRange" type="range" min="0" max="2.5" step="0.01" value="1.00">
+        <input id="energyNum" type="number" min="0" max="10" step="0.01" value="1.00">
+      </span>
+    </label>
+
+    <label>
+      Independence
+      <span class="row">
+        <input id="indepRange" type="range" min="0" max="1" step="0.01" value="0.15">
+        <input id="indepNum" type="number" min="0" max="1" step="0.01" value="0.15">
+      </span>
+    </label>
+
+    <label>
+      Seed
+      <span class="row">
+        <input id="seedNum" type="number" min="0" max="999999" step="1" value="1337">
+        <button id="reseedBtn" title="Randomize seeded per-plane mapping">Reseed</button>
+      </span>
+    </label>
+
+    <label>
+      ChangeRate (s)
+      <span class="row">
+        <input id="changeRange" type="range" min="0" max="20" step="0.1" value="0">
+        <input id="changeNum" type="number" min="0" max="60" step="0.1" value="0">
+      </span>
+    </label>
+
+    <label>
+      PerPlane Spread
+      <span class="row">
+        <input id="spreadRange" type="range" min="0" max="1" step="0.01" value="0.35">
+        <input id="spreadNum" type="number" min="0" max="1" step="0.01" value="0.35">
+      </span>
+    </label>
+
+    <details id="adv" open>
+      <summary>Balanced Advanced</summary>
+
+      <label>
+        FieldPrecess
+        <span class="row">
+          <input id="precessRange" type="range" min="0" max="0.6" step="0.001" value="0.08">
+          <input id="precessNum" type="number" min="0" max="5" step="0.001" value="0.08">
+        </span>
+      </label>
+
+      <label>
+        FieldTilt
+        <span class="row">
+          <input id="tiltRange" type="range" min="0" max="1.2" step="0.01" value="0.35">
+          <input id="tiltNum" type="number" min="0" max="3" step="0.01" value="0.35">
+        </span>
+      </label>
+
+      <label>
+        FieldBreathAmp
+        <span class="row">
+          <input id="breathAmpRange" type="range" min="0" max="0.8" step="0.01" value="0.18">
+          <input id="breathAmpNum" type="number" min="0" max="3" step="0.01" value="0.18">
+        </span>
+      </label>
+
+      <label>
+        FieldBreathHz
+        <span class="row">
+          <input id="breathHzRange" type="range" min="0" max="0.5" step="0.001" value="0.07">
+          <input id="breathHzNum" type="number" min="0" max="2" step="0.001" value="0.07">
+        </span>
+      </label>
+
+      <label>
+        PerPlaneWobAmp
+        <span class="row">
+          <input id="wobAmpRange" type="range" min="0" max="0.8" step="0.01" value="0.18">
+          <input id="wobAmpNum" type="number" min="0" max="3" step="0.01" value="0.18">
+        </span>
+      </label>
+
+      <label>
+        PerPlaneWobHz
+        <span class="row">
+          <input id="wobHzRange" type="range" min="0" max="0.8" step="0.001" value="0.14">
+          <input id="wobHzNum" type="number" min="0" max="2" step="0.001" value="0.14">
+        </span>
+      </label>
+
+      <label>
+        RollSpeed
+        <span class="row">
+          <input id="rollRange" type="range" min="0" max="0.5" step="0.001" value="0.06">
+          <input id="rollNum" type="number" min="0" max="2" step="0.001" value="0.06">
+        </span>
+      </label>
+    </details>
+
+    <div class="hint" id="hint">
+      (Press <b>S</b> to show/hide UI)
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    // -----------------------------
+    // UI State (schema)
+    // -----------------------------
+    const S = {
+      rigMode: "tumble",          // "tumble" | "balanced" | "paired"
+      spinMode: "uniform",        // "uniform" | "alternating" | "halves" | "perPlane"
+      bilateralMode: "off",       // "off" | "x" | "z"
+      upAxis: "y",                // "x" | "y" | "z"
+
+      MIRROR_PLANES: 4,
+      BaseSpeed: 0.60,
+      Twist: 0.90,
+
+      // Fan: 0 => even spread; ±1 => collapse
+      Fan: 0.00,
+      FanBias: 0.00,
+
+      Energy: 1.00,
+      Independence: 0.15,
+
+      Seed: 1337,
+      ChangeRate: 0.0,
+      PerPlaneSpread: 0.35,
+
+      // Balanced advanced
+      FieldPrecess: 0.08,
+      FieldTilt: 0.35,
+      FieldBreathAmp: 0.18,
+      FieldBreathHz: 0.07,
+      PerPlaneWobAmp: 0.18,
+      PerPlaneWobHz: 0.14,
+      RollSpeed: 0.06
+    };
+
+    // -----------------------------
+    // Renderer / scene
+    // -----------------------------
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x050505, 700, 1400);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 4000);
+    camera.position.set(0, 180, 420);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.55);
+    dir.position.set(1, 1, 0.5);
+    scene.add(dir);
+
+    // Dome wireframe
+    const R = 200;
+    const domeWire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(new THREE.SphereGeometry(R, 48, 24)),
+      new THREE.LineBasicMaterial({ color: 0x00b8fb, transparent:true, opacity: 0.5 })
+    );
+    scene.add(domeWire);
+
+    // Groups
+    const mirrorGroup = new THREE.Group();
+    const normalGroup = new THREE.Group();
+    const bilateralGroup = new THREE.Group();
+    scene.add(mirrorGroup, normalGroup, bilateralGroup);
+
+    // Materials
+    const planeMatPrimary = new THREE.MeshBasicMaterial({
+      color: 0xff0099, wireframe: true, transparent:true, opacity: 0.70, depthWrite:false
+    });
+    const circleMatPrimary = new THREE.LineBasicMaterial({ color: 0xff0099, transparent:true, opacity: 0.85 });
+
+    // Doppel: fainter so you can read overlap
+    const planeMatDoppel = new THREE.MeshBasicMaterial({
+      color: 0xff0099, wireframe: true, transparent:true, opacity: 0.35, depthWrite:false
+    });
+    const circleMatDoppel = new THREE.LineBasicMaterial({ color: 0xff0099, transparent:true, opacity: 0.8 });
+
+    const normalMatPrimary = new THREE.LineBasicMaterial({ color: 0x55aaff, transparent:true, opacity: 0.7 });
+    const normalMatDoppel  = new THREE.LineBasicMaterial({ color: 0x55aaff, transparent:true, opacity: 0.35 });
+
+    const bilateralMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent:true, opacity: 0.08, side: THREE.DoubleSide, depthWrite:false
+    });
+
+    function buildGreatCirclePoints(radius, segments=240){
+      const pts = [];
+      for (let i=0;i<=segments;i++){
+        const t = (i/segments) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(t)*radius, Math.sin(t)*radius, 0));
+      }
+      return pts;
+    }
+    const baseCircleGeom = new THREE.BufferGeometry().setFromPoints(buildGreatCirclePoints(R, 240));
+
+    function clearGroup(g){
+      while (g.children.length){
+        const c = g.children.pop();
+        if (c.geometry) c.geometry.dispose();
+      }
+    }
+
+    function rebuildRig(){
+      clearGroup(mirrorGroup);
+      clearGroup(normalGroup);
+
+      const N = Math.max(1, S.MIRROR_PLANES);
+      const paired = (S.rigMode === "paired");
+      const totalPlanes = paired ? (N * 2) : N;
+
+      for (let i=0; i<totalPlanes; i++){
+        const isDoppel = paired && (i >= N);
+
+        const planeMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(R*2.2, R*2.2, 12, 12),
+          isDoppel ? planeMatDoppel : planeMatPrimary
+        );
+
+        const circle = new THREE.Line(baseCircleGeom.clone(), isDoppel ? circleMatDoppel : circleMatPrimary);
+
+        const nGeom = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0,0,0),
+          new THREE.Vector3(0,0,R*0.95)
+        ]);
+        const nLine = new THREE.Line(nGeom, isDoppel ? normalMatDoppel : normalMatPrimary);
+
+        mirrorGroup.add(planeMesh, circle);
+        normalGroup.add(nLine);
+      }
+    }
+
+    function rebuildBilateralPlane(){
+      clearGroup(bilateralGroup);
+      if (S.bilateralMode === "off") return;
+
+      const geom = new THREE.PlaneGeometry(R*2.4, R*2.4, 1, 1);
+      const mesh = new THREE.Mesh(geom, bilateralMat);
+
+      if (S.bilateralMode === "x"){
+        mesh.rotation.y = Math.PI * 0.5;  // normal +X
+      } else if (S.bilateralMode === "z"){
+        mesh.rotation.x = Math.PI * 0.5;  // normal +Z
+      }
+      bilateralGroup.add(mesh);
+    }
+
+    rebuildRig();
+    rebuildBilateralPlane();
+
+    // -----------------------------
+    // Math utils
+    // -----------------------------
+    const TAU = Math.PI * 2;
+    function clamp(x,a,b){ return x < a ? a : (x > b ? b : x); }
+    function dot3(ax,ay,az,bx,by,bz){ return ax*bx + ay*by + az*bz; }
+    function cross3(ax,ay,az,bx,by,bz){
+      return [ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx];
+    }
+    function norm3(x,y,z){
+      const m = Math.hypot(x,y,z) || 1;
+      return [x/m, y/m, z/m];
+    }
+    function rotateAroundAxis(vx,vy,vz, kx,ky,kz, a){
+      const c = Math.cos(a), s = Math.sin(a);
+      const d = dot3(vx,vy,vz, kx,ky,kz);
+      const cx = ky*vz - kz*vy;
+      const cy = kz*vx - kx*vz;
+      const cz = kx*vy - ky*vx;
+      return [
+        vx*c + cx*s + kx*d*(1-c),
+        vy*c + cy*s + ky*d*(1-c),
+        vz*c + cz*s + kz*d*(1-c)
+      ];
+    }
+
+    function hash1(i, seed){
+      let h = (i * 374761393) ^ (seed * 668265263);
+      h = (h ^ (h >> 13)) >>> 0;
+      h = Math.imul(h, 1274126177) >>> 0;
+      return (h >>> 0) / 4294967296;
+    }
+
+    function basisFromUp(upAxis){
+      if (upAxis === "x") return { U:[1,0,0], B:[0,0,1], P:[0,1,0] };
+      if (upAxis === "z") return { U:[0,0,1], B:[1,0,0], P:[0,1,0] };
+      return { U:[0,1,0], B:[1,0,0], P:[0,0,1] }; // y
+    }
+
+    function spinDirForPlane(k, N, mode){
+      if (mode === "alternating") return (k % 2 === 0) ? 1 : -1;
+      if (mode === "halves"){
+        if (N < 2) return 1;
+        return (k < (N/2)) ? 1 : -1;
+      }
+      return 1;
+    }
+
+    function perPlaneSpeedMul(k, seed, spread){
+      const r = hash1(k + 11, seed);
+      return 1 + (r - 0.5) * 2 * spread; // 1 ± spread
+    }
+
+    // -----------------------------
+    // Core: build PRIMARY quaternions
+    // -----------------------------
+    const zAxis = new THREE.Vector3(0,0,1);
+    const tmpN  = new THREE.Vector3();
+    const qTmp  = new THREE.Quaternion();
+
+    function buildPrimaryQuats(t){
+      const N = Math.max(1, S.MIRROR_PLANES);
+
+      // unique planes only span π (because n and -n are same plane)
+      const slice = Math.PI / N;
+
+      const { U, B, P } = basisFromUp(S.upAxis);
+      let [Ux,Uy,Uz] = U;
+      let [Bx,By,Bz] = B;
+      let [Px,Py,Pz] = P;
+
+      let seed = S.Seed | 0;
+      if (S.ChangeRate > 0.0001){
+        const bump = Math.floor(t / S.ChangeRate) | 0;
+        seed = (seed + bump * 9973) | 0;
+      }
+
+      const baseSpinGlobal = t * S.BaseSpeed;
+
+      const fan = clamp(S.Fan, -1, 1);
+      const spread = 1 - Math.min(1, Math.abs(fan));
+      const c = (N - 1) * 0.5;
+
+      const bias = clamp(S.FanBias, -1, 1);
+      const biasShift = bias * (slice * c);
+
+      const quats = new Array(N);
+
+      const rig = (S.rigMode === "paired") ? "balanced" : S.rigMode;
+      const spinMode = (S.rigMode === "paired") ? "alternating" : S.spinMode;
+
+      if (rig === "balanced"){
+        const precA = t * S.FieldPrecess;
+        let Paxis = rotateAroundAxis(Px,Py,Pz, Ux,Uy,Uz, precA);
+        let [Pnx,Pny,Pnz] = norm3(Paxis[0], Paxis[1], Paxis[2]);
+
+        let Q = cross3(Ux,Uy,Uz, Pnx,Pny,Pnz);
+        let [Qx,Qy,Qz] = norm3(Q[0], Q[1], Q[2]);
+
+        const breath = Math.sin(t * TAU * S.FieldBreathHz) * S.FieldBreathAmp;
+        const sharedTilt = (S.FieldTilt + breath) * S.Energy;
+
+        const rollA = t * S.RollSpeed * (0.25 + 0.75*S.Energy);
+
+        for (let k=0; k<N; k++){
+          const dir = spinDirForPlane(k, N, spinMode);
+
+          let perMul = 1.0;
+          if (spinMode === "perPlane"){
+            perMul = perPlaneSpeedMul(k, seed, S.PerPlaneSpread);
+          }
+
+          const baseAngle = ((k - c) * slice * S.Twist * spread) + biasShift;
+          const a = (baseSpinGlobal * dir * perMul) + baseAngle;
+
+          let n = rotateAroundAxis(Bx,By,Bz, Ux,Uy,Uz, a);
+          let [nx,ny,nz] = n;
+
+          n = rotateAroundAxis(nx,ny,nz, Pnx,Pny,Pnz, sharedTilt);
+          [nx,ny,nz] = n;
+
+          const phase = (k / N) * TAU;
+          const wob = Math.sin(t * TAU * S.PerPlaneWobHz + phase) * (S.PerPlaneWobAmp * S.Energy);
+          n = rotateAroundAxis(nx,ny,nz, Qx,Qy,Qz, wob);
+          [nx,ny,nz] = n;
+
+          n = rotateAroundAxis(nx,ny,nz, Ux,Uy,Uz, rollA);
+          [nx,ny,nz] = n;
+
+          const indep = clamp(S.Independence, 0, 1);
+          if (indep > 0.0001){
+            const ra = (hash1(k + 101, seed) * TAU);
+            const rb = (hash1(k + 313, seed) * TAU);
+            let ax = Math.cos(ra) * Math.sin(rb);
+            let ay = Math.sin(ra) * Math.sin(rb);
+            let az = Math.cos(rb);
+            ;[ax,ay,az] = norm3(ax,ay,az);
+
+            const amp = indep * 0.35 * S.Energy;
+            const w = Math.sin(t * (0.7 + 0.3*hash1(k+777, seed)) + (k*0.37)) * amp;
+
+            n = rotateAroundAxis(nx,ny,nz, ax,ay,az, w);
+            [nx,ny,nz] = n;
+          }
+
+          tmpN.set(nx, ny, nz).normalize();
+          qTmp.setFromUnitVectors(zAxis, tmpN);
+          quats[k] = qTmp.clone();
+        }
+        return quats;
+      }
+
+      // ---- TUMBLE mode ----
+      for (let k=0; k<N; k++){
+        const dir = spinDirForPlane(k, N, spinMode);
+
+        let perMul = 1.0;
+        if (spinMode === "perPlane"){
+          perMul = perPlaneSpeedMul(k, seed, S.PerPlaneSpread);
+        }
+
+        const baseAngle = ((k - c) * slice * S.Twist * spread) + biasShift;
+        const a = (baseSpinGlobal * dir * perMul) + baseAngle;
+
+        let n = rotateAroundAxis(Bx,By,Bz, Ux,Uy,Uz, a);
+        let [nx,ny,nz] = n;
+
+        const e = S.Energy;
+
+        const ph1 = (k * 0.43) + (hash1(k + 17, seed) * TAU);
+        const tilt1 = Math.sin(t * (0.63 + 0.25*hash1(k+21, seed)) + ph1) * (0.55 * e);
+        n = rotateAroundAxis(nx,ny,nz, Px,Py,Pz, tilt1);
+        [nx,ny,nz] = n;
+
+        let Q = cross3(Ux,Uy,Uz, Px,Py,Pz);
+        let [Qx,Qy,Qz] = norm3(Q[0], Q[1], Q[2]);
+        const ph2 = (k * 0.71) + (hash1(k + 99, seed) * TAU);
+        const tilt2 = Math.sin(t * (0.41 + 0.22*hash1(k+55, seed)) + ph2) * (0.40 * e);
+        n = rotateAroundAxis(nx,ny,nz, Qx,Qy,Qz, tilt2);
+        [nx,ny,nz] = n;
+
+        const indep = clamp(S.Independence, 0, 1);
+        if (indep > 0.0001){
+          const ra = (hash1(k + 211, seed) * TAU);
+          const rb = (hash1(k + 223, seed) * TAU);
+          let ax = Math.cos(ra) * Math.sin(rb);
+          let ay = Math.sin(ra) * Math.sin(rb);
+          let az = Math.cos(rb);
+          ;[ax,ay,az] = norm3(ax,ay,az);
+
+          const amp = indep * 0.85 * e;
+          const w = Math.sin(t * (0.95 + 0.35*hash1(k+333, seed)) + (k*0.19)) * amp;
+          n = rotateAroundAxis(nx,ny,nz, ax,ay,az, w);
+          [nx,ny,nz] = n;
+        }
+
+        tmpN.set(nx, ny, nz).normalize();
+        qTmp.setFromUnitVectors(zAxis, tmpN);
+        quats[k] = qTmp.clone();
+      }
+
+      return quats;
+    }
+
+    // -----------------------------
+    // UI wiring
+    // -----------------------------
+    function bindPair(range, num, setter, isInt=false){
+      const syncFromRange = () => {
+        num.value = range.value;
+        setter(isInt ? Math.round(parseFloat(range.value)) : parseFloat(range.value));
+      };
+      const syncFromNum = () => {
+        range.value = num.value;
+        setter(isInt ? Math.round(parseFloat(num.value)) : parseFloat(num.value));
+      };
+      range.addEventListener("input", syncFromRange);
+      num.addEventListener("change", syncFromNum);
+    }
+    function bindSelect(sel, setter){
+      sel.addEventListener("change", ()=> setter(sel.value));
+    }
+
+    const uiEl = document.getElementById("ui");
+    const elRigMode = document.getElementById("rigMode");
+    const elSpinMode = document.getElementById("spinMode");
+    const elAdv = document.getElementById("adv");
+    const elHint = document.getElementById("hint");
+
+    // NEW: 'S' toggles UI show/hide
+    let uiVisible = true;
+    function setUIVisible(v){
+      uiVisible = !!v;
+      uiEl.style.display = uiVisible ? "" : "none";
+    }
+    window.addEventListener("keydown", (e)=>{
+      if (e.repeat) return;
+      if (e.key === "s" || e.key === "S"){
+        // avoid toggling while typing in inputs
+        const tag = (document.activeElement && document.activeElement.tagName) ? document.activeElement.tagName.toLowerCase() : "";
+        if (tag === "input" || tag === "select" || tag === "textarea") return;
+        setUIVisible(!uiVisible);
+      }
+    });
+
+    function refreshModeUI(){
+      const paired = (S.rigMode === "paired");
+      elSpinMode.disabled = paired;
+      elSpinMode.style.opacity = paired ? "0.55" : "1";
+      if (paired){
+        S.spinMode = "alternating";
+        elSpinMode.value = "alternating";
+      }
+
+      const advOn = (S.rigMode === "balanced" || S.rigMode === "paired");
+      elAdv.style.opacity = advOn ? "1" : "0.55";
+
+      elHint.innerHTML =
+        `(Press <b>S</b> to show/hide UI)<br/>
+         Green = dome wireframe<br/>
+         Pink = primary mirror planes + great circles<br/>
+         Pink (faint) = doppel planes (inverse quaternion) ${paired ? "<br/><b>Paired:</b> doppel = exact inverse of primary each frame" : ""}<br/>
+         Blue = normals (debug)<br/>
+         White translucent = bilateral fold plane`;
+    }
+
+    bindSelect(elRigMode, v => { S.rigMode = v; rebuildRig(); refreshModeUI(); });
+    bindSelect(elSpinMode, v => { S.spinMode = v; refreshModeUI(); });
+
+    bindSelect(document.getElementById("bilateralMode"), v => { S.bilateralMode = v; rebuildBilateralPlane(); });
+    bindSelect(document.getElementById("upAxis"), v => { S.upAxis = v; });
+
+    bindPair(
+      document.getElementById("planesRange"),
+      document.getElementById("planesNum"),
+      v => { S.MIRROR_PLANES = Math.max(1, Math.min(10, v|0)); rebuildRig(); },
+      true
+    );
+
+    bindPair(document.getElementById("speedRange"), document.getElementById("speedNum"), v => S.BaseSpeed = v);
+    bindPair(document.getElementById("twistRange"), document.getElementById("twistNum"), v => S.Twist = v);
+
+    bindPair(document.getElementById("fanRange"), document.getElementById("fanNum"), v => S.Fan = clamp(v, -1, 1));
+    bindPair(document.getElementById("fanBiasRange"), document.getElementById("fanBiasNum"), v => S.FanBias = clamp(v, -1, 1));
+
+    bindPair(document.getElementById("energyRange"), document.getElementById("energyNum"), v => S.Energy = v);
+    bindPair(document.getElementById("indepRange"), document.getElementById("indepNum"), v => S.Independence = v);
+
+    document.getElementById("seedNum").addEventListener("change", (e)=>{
+      S.Seed = Math.max(0, Math.min(999999, (parseInt(e.target.value,10) || 0)));
+      e.target.value = S.Seed;
+    });
+    document.getElementById("reseedBtn").addEventListener("click", ()=>{
+      S.Seed = (Math.random() * 999999) | 0;
+      document.getElementById("seedNum").value = S.Seed;
+    });
+
+    bindPair(document.getElementById("changeRange"), document.getElementById("changeNum"), v => S.ChangeRate = Math.max(0, v));
+    bindPair(document.getElementById("spreadRange"), document.getElementById("spreadNum"), v => S.PerPlaneSpread = clamp(v, 0, 1));
+
+    bindPair(document.getElementById("precessRange"), document.getElementById("precessNum"), v => S.FieldPrecess = Math.max(0, v));
+    bindPair(document.getElementById("tiltRange"), document.getElementById("tiltNum"), v => S.FieldTilt = Math.max(0, v));
+    bindPair(document.getElementById("breathAmpRange"), document.getElementById("breathAmpNum"), v => S.FieldBreathAmp = Math.max(0, v));
+    bindPair(document.getElementById("breathHzRange"), document.getElementById("breathHzNum"), v => S.FieldBreathHz = Math.max(0, v));
+    bindPair(document.getElementById("wobAmpRange"), document.getElementById("wobAmpNum"), v => S.PerPlaneWobAmp = Math.max(0, v));
+    bindPair(document.getElementById("wobHzRange"), document.getElementById("wobHzNum"), v => S.PerPlaneWobHz = Math.max(0, v));
+    bindPair(document.getElementById("rollRange"), document.getElementById("rollNum"), v => S.RollSpeed = Math.max(0, v));
+
+    refreshModeUI();
+
+    // -----------------------------
+    // Animate
+    // -----------------------------
+    const clock = new THREE.Clock();
+    const qInv = new THREE.Quaternion();
+
+    function animate(){
+      const t = clock.getElapsedTime();
+
+      const N = Math.max(1, S.MIRROR_PLANES);
+      const paired = (S.rigMode === "paired");
+
+      const primaryQuats = buildPrimaryQuats(t);
+
+      for (let k=0; k<N; k++){
+        const qk = primaryQuats[k] || new THREE.Quaternion();
+
+        const planeMeshP = mirrorGroup.children[(k*2) + 0];
+        const circleP    = mirrorGroup.children[(k*2) + 1];
+        const nLineP     = normalGroup.children[k];
+
+        planeMeshP.setRotationFromQuaternion(qk);
+        circleP.setRotationFromQuaternion(qk);
+        nLineP.setRotationFromQuaternion(qk);
+
+        if (paired){
+          qInv.copy(qk).conjugate(); // exact inverse
+
+          const kd = k + N;
+
+          const planeMeshD = mirrorGroup.children[(kd*2) + 0];
+          const circleD    = mirrorGroup.children[(kd*2) + 1];
+          const nLineD     = normalGroup.children[kd];
+
+          planeMeshD.setRotationFromQuaternion(qInv);
+          circleD.setRotationFromQuaternion(qInv);
+          nLineD.setRotationFromQuaternion(qInv);
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    window.addEventListener("resize", ()=>{
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
