@@ -14,7 +14,7 @@ export const meta = {
 const CAUSTIC_SPEED = .75;
 
 // Size control (bigger = larger features; smaller = tighter pattern)
-const CAUSTIC_SIZE = 15.00;
+const CAUSTIC_SIZE = 17.00;
 
 // Thickness control (0..1): higher = thinner/brighter filaments
 const CAUSTIC_THICKNESS = .0001;

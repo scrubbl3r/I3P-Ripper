@@ -15,13 +15,13 @@
 export const meta = {
   name: "Tsunami — planewave (pose rotatable) + engage-gated loop (prevents flash on clean start)",
   fps: 60,
-  duration: 120
+  duration: 10
 };
 
 // ============================================================================
 // POSE (master direction knob)
 // ============================================================================
-const START_AZ_DEG = 300; // 0..360 (try 0, 90, 180, 270)
+const START_AZ_DEG = 0; // 0..360 (try 0, 90, 180, 270)
 
 // ============================================================================
 // COLORS
@@ -35,8 +35,8 @@ const RED  = [1, 1, 1, 1]; // +n side (initially WHITE)
 // ============================================================================
 // MOTION
 // ============================================================================
-const TILT_X_DEG     = 20;   // fixed tilt about X
-const SPIN_PERIOD_MS = 2000; // one full revolution around Y per 2000 ms
+const TILT_X_DEG     = 22;   // fixed tilt about X
+const SPIN_PERIOD_MS = 2200; // one full revolution around Y per 2000 ms
 
 // Independent sweeps & Z tumble
 const X_SWEEP_MS   = 2700; // ms: x : (+X0 → +X1)
@@ -54,7 +54,7 @@ const PAUSE_MS     = 1000; // hold time between loops (monochrome pause)
 const X0_WU = 70;
 const X1_WU = -70;
 
-const Y0_WU = -61;  // <-- your "culprit" value (try -60 etc.)
+const Y0_WU = -70;  // <-- your "culprit" value (try -60 etc.)
 const Y1_WU =  57;
 
 // Optional pads (safe knobs)
@@ -64,8 +64,8 @@ const START_Y_EXTRA_WU = 0;  // try 1..10 to push the whole path down a bit
 // ============================================================================
 // SOFT, UNDULATING EDGE (rippled feather)
 // ============================================================================
-const FEATHER_WU      = 4.5;
-const RIPPLE_AMP_WU   = 3.0;
+const FEATHER_WU      = 6.0;
+const RIPPLE_AMP_WU   = 2.0;
 const FEATHER_GAIN    = 0.75;
 const RIPPLE_FREQ_CYC = 4.2;
 const RIPPLE_SPEED_HZ = 0.06;

@@ -1,11 +1,24 @@
-// ripp—tdl-kaleidoscope-prism-greatcircle-bands-v3-BALANCED.js
+// ripp—tdl-kaleidoscope-prism-greatcircle-bands-v3-BALANCED ( + SEEK_SECONDS).js
 // Preview contract: init(api), update(api, t, dt)
+//
+// Adds SEEK_SECONDS (fast-forward) exactly like your canon+newton+bands ripp:
+// - local timeline still starts at 0 on init and resets on backward scrubs
+// - then we add SEEK_SECONDS on top (clamped >= 0)
+// - affects: mirror rig motion (spin/field/wobble/roll), domain drift, ripple warp,
+//   and the PHASE_BLACK gate (so SEEK can skip the initial black flash)
 
 export const meta = {
-  name: "Kaleidoscope (prism v3 • Balanced): Organic motion + distribution-preserving mirror set + grayscale bands",
+  name: "Kaleidoscope (prism v3 • Balanced): Organic motion + distribution-preserving mirror set + grayscale bands (SEEK_SECONDS)",
   fps: 60,
   duration: 60
 };
+
+// ============================================================================
+// SEEK (global time offset)
+// ============================================================================
+// Start as if the ripp has already been running for N seconds.
+// This affects: mirror rig motion, drift, ripple warp, and the phase-black gate.
+const SEEK_SECONDS = 0.; // moments: 2.1, 
 
 // ============================================================================
 // PRISM CHAMBER (baseline)
@@ -241,11 +254,16 @@ export function update(api, t/*s*/, dt/*s*/){
   t  = Number.isFinite(t)  ? t  : 0;
   dt = Number.isFinite(dt) ? dt : 0;
 
+  // local time origin; reset on backward scrub
   if (_t0 === null){ _t0 = t; _prevT = t; }
   else if (_prevT !== null && t < _prevT - 1e-6){ _t0 = t; }
   _prevT = t;
 
-  const localT = Math.max(0, t - _t0);
+  // base local timeline
+  const localT0 = Math.max(0, t - _t0);
+
+  // NEW: seeked time (fast-forward, clamped >= 0)
+  const localT = Math.max(0, localT0 + Math.max(0, SEEK_SECONDS));
 
   const newIDS = allTDLIds(api);
   if (newIDS.length !== IDS.length){
@@ -275,6 +293,7 @@ export function update(api, t/*s*/, dt/*s*/){
 
   const changes = new Array(IDS.length);
 
+  // SEEK affects this gate too (so you can skip the initial black flash)
   if (localT < PHASE_BLACK){
     for (let i=0;i<IDS.length;i++) changes[i] = { id: IDS[i], color:[0,0,0,1] };
     api.setColors(changes);

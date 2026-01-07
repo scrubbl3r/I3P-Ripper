@@ -19,8 +19,8 @@ const CAUSTIC_SIZE      = 15.00;
 const CAUSTIC_THICKNESS = .1;
 
 const CAUSTIC_STRENGTH  = 0.75; // 0..1
-const WARP_AMOUNT       = 1.5;  // 0..2
-const WARP_SCALE        = .18;
+const WARP_AMOUNT       = 1.16;  // 0..2
+const WARP_SCALE        = .19;
 
 const DRIFT_DIR = norm3([0.0, -0.50, 0.0]);
 

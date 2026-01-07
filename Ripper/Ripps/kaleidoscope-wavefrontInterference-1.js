@@ -24,7 +24,7 @@ export const meta = {
 // SEEK (global time offset) + AXIS SLIDE
 // ============================================================================
 const AXIS_SLIDE_X_WU = 0.0;     // try: 5, 10, 20, -10
-const SEEK_SECONDS    = 0;   // try: 4, 8, 12, 18
+const SEEK_SECONDS    = 85;   // try: 4, 8, 12, 18
 
 // ============================================================================
 // 1) KALEIDOSCOPE CANON — PRISM RIG (mirror plane set)

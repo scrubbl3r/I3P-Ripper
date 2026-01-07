@@ -100,7 +100,7 @@ const BAND_INK     = 1.00;
 
 const BAND_T1      = 0.65;
 const BAND_T2      = 0.85;
-const BAND_FEATHER = 0.20;
+const BAND_FEATHER = 0.30;
 
 // ============================================================================
 // Schema helpers

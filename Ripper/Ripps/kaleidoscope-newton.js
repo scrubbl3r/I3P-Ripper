@@ -111,12 +111,12 @@ const GAMMA        = 1.; // <1 brighter mids, >1 darker mids
 
 // 3-tone grayscale bands (ink 0..1 -> shade 0..1)
 const BAND_BRIGHT  = .00;
-const BAND_MID     = 0.10;
+const BAND_MID     = 0.20;
 const BAND_INK     = 1.00;
 
 const BAND_T1      = 0.80 // bright→mid threshold
 const BAND_T2      = 0.90; // mid→ink threshold
-const BAND_FEATHER = 0.20; // softness (0.02..0.15 typical in smoothstep-space)
+const BAND_FEATHER = 0.50; // softness (0.02..0.15 typical in smoothstep-space)
 
 // ============================================================================
 // Schema helpers

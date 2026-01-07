@@ -1,11 +1,23 @@
-// ripp—tdl-kaleidoscope-prism-greatcircle-mirrors (WHITE CANVAS + MIRROR PLANES).js
+// ripp—tdl-kaleidoscope-prism-greatcircle-mirrors (WHITE CANVAS + MIRROR PLANES, SEEK_SECONDS).js
 // Preview contract: init(api), update(api, t, dt)
+//
+// Adds SEEK_SECONDS exactly like your other kaleidoscope ripps:
+// - Keep local timeline behavior (starts at 0 on init, resets on backward scrub)
+// - Then apply SEEK_SECONDS as a fast-forward offset (clamped >= 0)
+// - Affects: mirror plane rotation (baseA), any time-driven twist motion, and drift.
 
 export const meta = {
-  name: "Kaleidoscope (prism): Great-circle mirror planes (reflect rays) + world caustic ink",
+  name: "Kaleidoscope (prism): Great-circle mirror planes (reflect rays) + world caustic ink (SEEK_SECONDS)",
   fps: 60,
   duration: 60
 };
+
+// ============================================================================
+// SEEK (global time offset)
+// ============================================================================
+// Start as if the ripp has already been running for N seconds.
+// This affects: mirror rig motion + drift (and anything else derived from localT).
+const SEEK_SECONDS = 1.0; // try: 4, 8, 12, 18
 
 // ============================================================================
 // SSOT CONTROLS
@@ -236,11 +248,16 @@ export function update(api, t/*s*/, dt/*s*/){
   t  = Number.isFinite(t)  ? t  : 0;
   dt = Number.isFinite(dt) ? dt : 0;
 
+  // establish local time origin; reset on backward time jump
   if (_t0 === null){ _t0 = t; _prevT = t; }
   else if (_prevT !== null && t < _prevT - 1e-6){ _t0 = t; }
   _prevT = t;
 
-  const localT = Math.max(0, t - _t0);
+  // base local timeline
+  const localT0 = Math.max(0, t - _t0);
+
+  // NEW: seeked time (fast-forward)
+  const localT = Math.max(0, localT0 + Math.max(0, SEEK_SECONDS));
 
   // model swap
   const newIDS = allTDLIds(api);
@@ -272,7 +289,7 @@ export function update(api, t/*s*/, dt/*s*/){
 
   // Build mirror plane normals (through center), rotating over time.
   // We create a base normal, then rotate/twist variants.
-  const baseA = localT * PLANE_ROT_SPEED;
+  const baseA = localT * PLANE_ROT_SPEED; // SEEK affects this
   const normals = [];
 
   // start from a cardinal direction based on UP axis (to be stable on any dome orientation)
@@ -292,12 +309,10 @@ export function update(api, t/*s*/, dt/*s*/){
     ;[y,z] = rotX(y,z, a*0.63 + k*0.4);
     ;[x,y] = rotZ(x,y, a*0.41);
 
-    // normalize
-    const n = norm3(x,y,z);
-    normals.push(n);
+    normals.push(norm3(x,y,z));
   }
 
-  // world drift hookup (applied after reflection)
+  // world drift hookup (applied after reflection) — SEEK affects this
   const drift = localT * DRIFT_SPEED;
   const changes = new Array(IDS.length);
 

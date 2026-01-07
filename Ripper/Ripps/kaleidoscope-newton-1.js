@@ -26,7 +26,7 @@ export const meta = {
 // This affects: mirror rig motion, Newton domain drift/rotation/zoom pulse, ripple warp,
 // and any ChangeRate bucketing (if enabled later).
 const AXIS_SLIDE_X_WU = .0;
-const SEEK_SECONDS = 0.0; // try: 4, 8, 12, 18
+const SEEK_SECONDS = 3.0; // try: 4, 8, 12, 18
 
 // ============================================================================
 // 1) KALEIDOSCOPE CANON — PRISM RIG (mirror plane set)
@@ -109,7 +109,7 @@ const RIPPLE_FREQ  = .95;
 const RIPPLE_SPEED = 0.10;
 
 // Seam scaffold (adds ink along mirror boundaries)
-const SEAM_ADD = .16;
+const SEAM_ADD = .56;
 const SEAM_MIX = .6;
 
 // ============================================================================
@@ -117,16 +117,15 @@ const SEAM_MIX = .6;
 // ============================================================================
 
 const INK_STRENGTH = 1.; // overall ink multiplier
-const GAMMA        = .5; // <1 brighter mids, >1 darker mids
+const GAMMA        = 1.2; // <1 brighter mids, >1 darker mids
 
-// 3-tone grayscale bands (ink 0..1 -> shade 0..1)
-const BAND_BRIGHT  = .00;
-const BAND_MID    = 0.80;  // mid-gray fill
-const BAND_INK    = 1.0;  // darkest ink (not necessarily pure black)
+const BAND_BRIGHT  = 0.00;
+const BAND_MID     = 0.50;
+const BAND_INK     = 1.00;
 
-const BAND_T1     = 0.90;  // ink threshold for bright→mid
-const BAND_T2     = 0.95;  // ink threshold for mid→ink
-const BAND_FEATHER = .05; // softness of band edges (0.02–0.15)
+const BAND_T1      = 0.70;
+const BAND_T2      = 0.85;
+const BAND_FEATHER = 0.10;
 
 // ============================================================================
 // Schema helpers

@@ -57,8 +57,8 @@ const PHASE_OFFSET = 90.0;  // radians (yes, your existing tween uses 90.0 as-is
 // NEW (placed at top as requested). Default is 0 and (by default) does nothing.
 const EQUATOR_BAND_OFFSET_WU_FF = [
   { ms:   0, v: -100.0, ease: "outCubic" },
-  { ms:   1200, v: 10.0,ease: "inOutCubic"  },
-  { ms:   3500, v: -20.0 },
+  { ms:   1000, v: 10.0,ease: "inOutCubic"  },
+  { ms:   2500, v: -20.0 },
 ];
 
 // PRESERVED from your ripp (same values/timing/eases)
@@ -74,7 +74,7 @@ const PHASE_RATE_FF = [
 
 const AMP_WU_FF = [
   { ms:    0, v: 1.0, ease: "OutCubic" },
-  { ms: 4000, v: 34.0 },
+  { ms: 3000, v: 34.0 },
 ];
 
 const THICK_WU_FF = [

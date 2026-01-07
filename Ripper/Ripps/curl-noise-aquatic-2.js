@@ -43,6 +43,26 @@ export const meta = {
 const MASTER_SPEED = 2.0;
 
 // Mode 1: broad, slow flow
+const MODE1_SCALE    = 1.90;
+const MODE1_TIME     = .90;
+const MODE1_STRENGTH = 1.20;
+
+// Mode 2: finer, faster flow
+const MODE2_SCALE    = 0.70;
+const MODE2_TIME     = .70;
+const MODE2_STRENGTH = .80;
+/*
+// Mode 1: broad, slow flow
+const MODE1_SCALE    = 0.90;
+const MODE1_TIME     = .80;
+const MODE1_STRENGTH = 0.70;
+
+// Mode 2: finer, faster flow
+const MODE2_SCALE    = 0.70;
+const MODE2_TIME     = 1.0;
+const MODE2_STRENGTH = 1.10;
+
+// Mode 1: broad, slow flow
 const MODE1_SCALE    = 0.80;
 const MODE1_TIME     = 1.10;
 const MODE1_STRENGTH = 0.50;
@@ -51,7 +71,7 @@ const MODE1_STRENGTH = 0.50;
 const MODE2_SCALE    = 0.90;
 const MODE2_TIME     = 0.90;
 const MODE2_STRENGTH = 1.60;
-
+*/
 // Blend between the two modes
 const MODE_MIX = 0.50;
 
