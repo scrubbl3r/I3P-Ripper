@@ -2,14 +2,12 @@
 // Pure JS list of your vibe-coded ripps.
 // Each entry corresponds to a module at /Ripps/<id>.js that exports { meta, init(api), update(api,t,dt) }
 export default [
-  { id: 'kaleidoscope-mandelbrot-tumble-1', name: 'kaleidoscope-mandelbrot-tumble-1' },
-  { id: 'kaleidoscope-newton-1', name: 'kaleidoscope-newton-1' },
   //{ id: 'cymatics-chaldni', name: 'cymatics-chaldni' },
   //{ id: 'cymatics-chaldni-1', name: 'cymatics-chaldni-1' },
-  { id: 'kaleidoscope-newton', name: 'kaleidoscope-newton' },
-  { id: 'kaleidoscope-newton-1', name: 'kaleidoscope-newton-1' },
   { id: 'kaleidoscope-prism-2-bilateral', name: 'kaleidoscope-prism-2-bilateral'},
   { id: 'kaleidoscope-prism-2', name: 'kaleidoscope-prism-2'},
+  { id: '----', name: '----'},
+  { id: 'kaleidoscope-newton-arabesque-1', name: 'kaleidoscope-newton-arabesque-1' },
   { id: 'kaleidoscope-mandelbrot-tumble-1', name: 'kaleidoscope-mandelbrot-tumble-1' },
   { id: 'kaleidoscope-wavefrontInterference-1', name: 'kaleidoscope-wavefrontInterference-1' },
   { id: 'kaleidoscope-caustic-malachite-1', name: 'kaleidoscope-caustic-malachite-1' },
@@ -28,6 +26,7 @@ export default [
   { id: 'cascade-1', name: 'cascade-1' },
   { id: 'tsunami-1', name: 'tsunami-1' },
   { id: 'rising-tide-1', name: 'rising-tide-1' },
+  //{ id: 'kaleidoscope-newton', name: 'kaleidoscope-newton' },
   //{ id: 'circle-bands', name: 'circle-bands' },
   //{ id: 'oscilloscope-base', name: 'oscilloscope-base' },
   //{ id: 'sea-horizon-gradient', name: 'sea-horizon-gradient — 10s loop' },

@@ -26,7 +26,7 @@ export const meta = {
 // This affects: mirror rig motion, Newton domain drift/rotation/zoom pulse, ripple warp,
 // and any ChangeRate bucketing (if enabled later).
 const AXIS_SLIDE_X_WU = .0;
-const SEEK_SECONDS = 3.0; // try: 4, 8, 12, 18
+const SEEK_SECONDS = 54.0; // try: 4, 8, 12, 18
 
 // ============================================================================
 // 1) KALEIDOSCOPE CANON — PRISM RIG (mirror plane set)
@@ -54,7 +54,7 @@ const SPIN_MODE = "uniform";
 const BASE_SPEED = 0.20;
 
 // Twist multiplier (affects angular distribution)
-const TWIST = .80;
+const TWIST = 1.90;
 
 // Fan controls (apply ONLY to original planes)
 // Fan=0 => evenly distributed
@@ -64,7 +64,7 @@ const FAN = 0.00;       // [-1..1]
 const FAN_BIAS = 0.00;  // [-1..1]
 
 // Energy + Independence (motion intensity / divergence)
-const ENERGY = .80;         // 0..2.5
+const ENERGY = .90;         // 0..2.5
 const INDEPENDENCE = 0.15;   // 0..1 (micro-chaos / per-plane uniqueness)
 
 // Optional: seeded per-plane speed spread when SPIN_MODE === "perPlane"
@@ -92,25 +92,25 @@ const BILATERAL_MODE = "x"; // "off" | "x" | "z"
 const NEWTON_MAX_ITERS = 7;     // 10..30
 const NEWTON_EPS       = 3e-2;   // convergence threshold
 const NEWTON_SCALE     = 2.0;   // bigger = chunkier (less detail)
-const NEWTON_ROT_SPEED = .35;   // rad/sec rotate domain
-const NEWTON_DRIFT     = .40;   // drift speed in domain
-const NEWTON_ZOOM_PULSE_AMP   = .35; // 0..1 (scale modulation)
+const NEWTON_ROT_SPEED = .25;   // rad/sec rotate domain
+const NEWTON_DRIFT     = .10;   // drift speed in domain
+const NEWTON_ZOOM_PULSE_AMP   = .65; // 0..1 (scale modulation)
 const NEWTON_ZOOM_PULSE_HZ    = .06; // cycles/sec
 
 // How much basin identity affects ink (0 = pure convergence only)
 const BASIN_MIX = .50; // 0..0.6 subtle
 
 // Edge emphasis (boundary glow / ink boost near slow-converge regions)
-const EDGE_GAIN = .05; // 0..2
+const EDGE_GAIN = .55; // 0..2
 
 // Optional domain warp (tiny ripple helps “read” on coarse dome)
-const RIPPLE_WARP  = .12; // 0 disables
+const RIPPLE_WARP  = 0; // 0 disables
 const RIPPLE_FREQ  = .95;
 const RIPPLE_SPEED = 0.10;
 
 // Seam scaffold (adds ink along mirror boundaries)
-const SEAM_ADD = .56;
-const SEAM_MIX = .6;
+const SEAM_ADD = .06;
+const SEAM_MIX = 1.;
 
 // ============================================================================
 // 3) PAINT CONTROLS — INKING + BANDS
@@ -123,9 +123,9 @@ const BAND_BRIGHT  = 0.00;
 const BAND_MID     = 0.50;
 const BAND_INK     = 1.00;
 
-const BAND_T1      = 0.70;
-const BAND_T2      = 0.85;
-const BAND_FEATHER = 0.10;
+const BAND_T1      = 0.75;
+const BAND_T2      = 0.80;
+const BAND_FEATHER = 0.25;
 
 // ============================================================================
 // Schema helpers
